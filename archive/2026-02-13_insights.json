@@ -1,0 +1,44 @@
+{
+  "new_stories": [],
+  "continuing_threads": [
+    {
+      "id": 46985609,
+      "title": "Carl Sagan's Baloney Detection Kit: Tools for Thinking Critically (2025)",
+      "url": "https://www.openculture.com/2025/09/the-carl-sagan-baloney-detection-kit.html",
+      "score": 209,
+      "by": "nobody9999",
+      "time": 1770879279,
+      "descendants": 108,
+      "text": "",
+      "fetched_at": "2026-02-13T17:26:46.668675",
+      "matched_topic": "Philosophy/Thinking Tools",
+      "topic_score": 0.3664281368255615,
+      "all_topic_scores": {
+        "AI/ML/LLMs": 0.13317546248435974,
+        "Data Science": 0.11862768977880478,
+        "Parenting/Education": 0.09997550398111343,
+        "Philosophy/Thinking Tools": 0.3664281368255615
+      }
+    },
+    {
+      "id": 46990729,
+      "title": "An AI agent published a hit piece on me",
+      "url": "https://theshamblog.com/an-ai-agent-published-a-hit-piece-on-me/",
+      "score": 1882,
+      "by": "scottshambaugh",
+      "time": 1770913404,
+      "descendants": 753,
+      "text": "Previously: <i>AI agent opens a PR write a blogpost to shames the maintainer who closes it</i> - <a href=\"https:&#x2F;&#x2F;news.ycombinator.com&#x2F;item?id=46987559\">https:&#x2F;&#x2F;news.ycombinator.com&#x2F;item?id=46987559</a> - Feb 2026 (582 comments)",
+      "fetched_at": "2026-02-13T17:26:43.945988",
+      "matched_topic": "AI/ML/LLMs",
+      "topic_score": 0.3432912826538086,
+      "all_topic_scores": {
+        "AI/ML/LLMs": 0.3432912826538086,
+        "Data Science": 0.0874190628528595,
+        "Parenting/Education": -0.05812457576394081,
+        "Philosophy/Thinking Tools": 0.10753936320543289
+      }
+    }
+  ],
+  "notable_authors": []
+}

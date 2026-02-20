@@ -1,0 +1,46 @@
+# knos-digest
+
+Daily HN digest archive in markdown format.
+
+## Format
+
+**Filename:** `YYYY-MM-DD.md`  
+**Content:** Full digest as delivered to WhatsApp
+
+## Structure
+
+Each file contains:
+- **Matched Stories** - Topic-organized HN stories
+- **Engagement Opportunities** - 5 actionable opportunities
+- **Notable Authors** - Authors being tracked
+
+## Usage
+
+**View digest:**
+```bash
+cat 2026-02-20.md
+```
+
+**Search across digests:**
+```bash
+grep -r "AI agent" .
+```
+
+**Count engagements over time:**
+```bash
+grep -c "🎯 \*Engagement Opportunities\*" *.md
+```
+
+## Archive Stats
+
+```bash
+# Total digests
+ls -1 *.md | wc -l
+
+# Digests with engagement section
+grep -l "🎯" *.md | wc -l
+```
+
+---
+
+_Auto-generated daily at 2 PM by knowledge-os pipeline_

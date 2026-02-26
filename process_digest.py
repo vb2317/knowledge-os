@@ -3,6 +3,7 @@
 Main digest processing pipeline using new storage architecture
 """
 import json
+import re
 import sys
 from datetime import datetime
 from typing import List, Dict
@@ -21,6 +22,80 @@ def load_config(config_path: str = "config.json") -> Dict:
     """Load configuration"""
     with open(config_path) as f:
         return json.load(f)
+
+def _extract_first_sentence(html_text: str) -> str:
+    """Extract first meaningful sentence from an HN comment (HTML)."""
+    # Strip HTML tags
+    text = re.sub(r'<[^>]+>', ' ', html_text)
+    # Decode common HTML entities
+    text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&#x27;', "'").replace('&quot;', '"')
+    text = text.strip()
+    if not text:
+        return ""
+    # Take first sentence (split on . ! ?)
+    match = re.match(r'(.+?[.!?])\s', text)
+    if match:
+        return match.group(1).strip()
+    # Fallback: first 120 chars
+    return text[:120].strip()
+
+
+def _extract_keywords(sentences: List[str], stop_words: set) -> List[str]:
+    """Extract key topic words from sentences."""
+    word_counts = {}
+    for sent in sentences:
+        words = re.findall(r'[a-zA-Z]{4,}', sent.lower())
+        for w in words:
+            if w not in stop_words:
+                word_counts[w] = word_counts.get(w, 0) + 1
+    # Return top words by frequency
+    sorted_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)
+    return [w for w, _ in sorted_words[:5]]
+
+
+def summarize_comments(comments: List[Dict], descendants: int = 0) -> str:
+    """
+    Generate a 1-line summary of HN comments for digest display.
+    Simple extractive approach: pull key themes from top comments.
+    """
+    if not comments:
+        if descendants:
+            return f"{descendants} comments"
+        return None
+
+    stop_words = {
+        'this', 'that', 'have', 'with', 'they', 'from', 'were', 'been',
+        'would', 'could', 'should', 'about', 'which', 'their', 'there',
+        'what', 'when', 'will', 'more', 'some', 'than', 'them', 'like',
+        'just', 'also', 'into', 'very', 'does', 'your', 'much', 'most',
+        'each', 'only', 'even', 'want', 'really', 'think', 'know', 'people',
+        'thing', 'things', 'using', 'being', 'well', 'still', 'though',
+    }
+
+    # Extract first sentences from top 5 comments
+    sentences = []
+    for comment in comments[:5]:
+        text = comment.get('text', '')
+        if not text:
+            continue
+        sent = _extract_first_sentence(text)
+        if sent:
+            sentences.append(sent)
+
+    if not sentences:
+        if descendants:
+            return f"{descendants} comments"
+        return None
+
+    # Extract key themes
+    keywords = _extract_keywords(sentences, stop_words)
+    if keywords:
+        themes = ", ".join(keywords[:3])
+        return f"Discussing: {themes}"
+
+    # Fallback
+    return f"{descendants or len(comments)} comments"
+
 
 def process_stories(stories: List[Dict], config: Dict) -> Dict:
     """Process stories through the new storage pipeline"""
@@ -114,6 +189,23 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
             metadata={'digest_id': digest_id}
         )
 
+    # Fetch comment summaries for matched stories
+    if ENGAGEMENT_ENABLED and matched_stories:
+        try:
+            db_config = config['storage']['sqlite']
+            comment_detector = EngagementDetector(db_config['db_path'])
+            for story in matched_stories:
+                story_id = story.get('id')
+                if not story_id:
+                    continue
+                try:
+                    comments = comment_detector.fetch_story_comments(story_id, max_depth=1)
+                    story['comment_summary'] = summarize_comments(comments, story.get('descendants', 0))
+                except Exception:
+                    story['comment_summary'] = None
+        except Exception as e:
+            print(f"Warning: Comment summarization failed: {e}", file=sys.stderr)
+
     # Detect engagement opportunities
     engagement_opportunities = []
     if ENGAGEMENT_ENABLED and matched_stories:
@@ -171,8 +263,10 @@ def generate_digest_text(result: Dict) -> str:
             title = story['title']
             score = story['score']
             author = story['by']
-            url = story['url']
-            
+            story_id = story.get('id')
+            descendants = story.get('descendants', 0)
+            comment_summary = story.get('comment_summary')
+
             # Check if author is notable
             author_marker = ""
             if notable_authors:
@@ -180,10 +274,19 @@ def generate_digest_text(result: Dict) -> str:
                     if notable['author_name'] == author:
                         author_marker = " ⭐"
                         break
-            
+
+            # Comment count display
+            comment_str = f"{descendants} comments" if descendants else "0 comments"
+
             lines.append(f"• {title}")
-            lines.append(f"  ↑{score} by {author}{author_marker}")
-            lines.append(f"  {url}")
+            lines.append(f"  ↑{score} | {comment_str} | by {author}{author_marker}")
+            if comment_summary:
+                lines.append(f"  💬 {comment_summary}")
+            # Use HN discussion link instead of article URL
+            if story_id:
+                lines.append(f"  🔗 https://news.ycombinator.com/item?id={story_id}")
+            else:
+                lines.append(f"  🔗 {story.get('url', '')}")
         
         lines.append("")  # Blank line between topics
     
@@ -203,7 +306,26 @@ def generate_digest_text(result: Dict) -> str:
     
     # Footer
     lines.append("_Keep building. The frontier moves forward._")
-    
+
+    # Read tracker section
+    all_trackable = list(stories)
+    for opp in engagement_opportunities:
+        opp_story = opp.get('story', {})
+        if opp_story.get('title') and opp_story not in stories:
+            all_trackable.append(opp_story)
+
+    if all_trackable:
+        lines.append("")
+        lines.append("---")
+        lines.append("## 📖 Read Tracker")
+        lines.append("_Mark what you read, add notes if you like_")
+        lines.append("")
+        for story in all_trackable:
+            title = story['title']
+            score = story.get('score', 0)
+            lines.append(f"- [ ] {title} (↑{score})")
+            lines.append("  Notes: ")
+
     return "\n".join(lines)
 
 if __name__ == "__main__":

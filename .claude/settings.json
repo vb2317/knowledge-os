@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(venv/bin/python -m pytest *)",
+      "Bash(venv/bin/python process_digest.py *)",
+      "Bash(venv/bin/python sync_reading_log.py *)",
+      "Bash(venv/bin/python engagement_summary.py *)",
+      "Bash(venv/bin/python -c *)",
+      "Bash(uv pip install * --python venv/bin/python)",
+      "Bash(uv pip list *)",
+      "Bash(sqlite3 hn_digest_v2.db *)",
+      "Bash(bash run_digest_v2.sh)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Read(**/*.py)",
+      "Read(**/*.json)",
+      "Read(**/*.md)",
+      "Read(**/*.sh)",
+      "Edit(**/*.py)",
+      "Edit(**/*.md)"
+    ],
+    "deny": [
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(rm -rf *)",
+      "Bash(rm *.db)",
+      "Read(.env*)"
+    ]
+  }
+}

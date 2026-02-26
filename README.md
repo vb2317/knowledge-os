@@ -223,9 +223,11 @@ Daily curated Hacker News stories delivered via WhatsApp at 2 PM, personalized t
 knowledge-os/
 ├── README.md                    # This file
 ├── SAMPLE_OUTPUT.md             # Example digest output
+├── DAILY_FLOW.md                # Summary vs Digest comparison
 ├── ARCHITECTURE.md              # Detailed architecture docs
 ├── ENGAGEMENT.md                # Engagement strategy (Feb 16)
 ├── ENGAGEMENT_PLAN.md           # Implementation details
+├── ENGAGEMENT_SUMMARY_PLAN.md   # Summary design & delivery options
 ├── INTEGRATION_GUIDE.md         # Integration guide (Feb 16)
 ├── NEXT.md                      # Roadmap
 │
@@ -243,8 +245,10 @@ knowledge-os/
 │
 ├── Delivery
 ├── send_digest.py               # WhatsApp sender + archiver
-├── daily_digest.sh              # Cron wrapper
-├── run_digest_v2.sh             # Full pipeline runner
+├── daily_digest.sh              # Digest cron wrapper (2 PM)
+├── run_digest_v2.sh             # Full digest pipeline
+├── engagement_summary.py        # Summary generator (9 AM)
+├── send_engagement_summary.sh   # Summary delivery wrapper
 │
 ├── Testing
 ├── test_engagement.sh           # Engagement module tests
@@ -269,36 +273,54 @@ knowledge-os/
 
 ## Usage
 
-### Run Full Pipeline (Manual)
+### Daily Messages (Automatic)
 
+**Two separate messages at different times:**
+
+1. **Engagement Summary (9:00 AM)**
+   - Yesterday's engagement reflection
+   - Comments posted, opportunities engaged
+   - 7-day trend + tips
+   - Only sent when you engaged yesterday
+
+2. **HN Digest (2:00 PM)**
+   - Today's matched stories
+   - 5 engagement opportunities
+   - Notable authors
+
+See [DAILY_FLOW.md](DAILY_FLOW.md) for detailed comparison.
+
+### Manual Commands
+
+**Run digest pipeline:**
 ```bash
 cd /Users/vb/.openclaw/workspace/knowledge-os
 ./run_digest_v2.sh
 ```
 
-**Output:** Digest printed to stdout, saved to archive, sent to WhatsApp
-
-### Test Engagement Module
-
+**Test engagement module:**
 ```bash
 ./test_engagement.sh
 ```
 
-**Output:** Module tests, sample opportunities, comment sync
-
-### Check Engagement Stats
-
+**Check engagement stats:**
 ```bash
 python3 engagement.py
 ```
 
-**Output:** Weekly report (opportunities, engagement rate, comments posted)
+**Generate engagement summary (yesterday):**
+```bash
+python3 engagement_summary.py
+```
 
 ### Scheduled Delivery
 
 ```bash
-# Cron job (2 PM daily)
+# Digest: 2 PM daily
 0 14 * * * /Users/vb/.openclaw/workspace/knowledge-os/daily_digest.sh
+
+# Summary: 9 AM daily (to be added)
+0 9 * * * /Users/vb/.openclaw/workspace/knowledge-os/send_engagement_summary.sh
 ```
 
 ---

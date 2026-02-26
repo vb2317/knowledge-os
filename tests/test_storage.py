@@ -1,0 +1,166 @@
+"""Tests for SQLite storage with temp file DB"""
+import pytest
+from storage_sqlite import SQLiteStorage
+
+
+@pytest.fixture
+def storage(tmp_path):
+    """Create a SQLite storage instance with a temp file"""
+    return SQLiteStorage(db_path=str(tmp_path / "test.db"))
+
+
+@pytest.fixture
+def user_id(storage):
+    """Create a test user and return user_id"""
+    return storage.get_or_create_user("test@example.com")
+
+
+class TestUsers:
+    def test_create_user(self, storage):
+        uid = storage.get_or_create_user("alice@test.com")
+        assert uid >= 1
+
+    def test_get_existing_user(self, storage):
+        uid1 = storage.get_or_create_user("bob@test.com")
+        uid2 = storage.get_or_create_user("bob@test.com")
+        assert uid1 == uid2
+
+    def test_different_users_different_ids(self, storage):
+        uid1 = storage.get_or_create_user("a@test.com")
+        uid2 = storage.get_or_create_user("b@test.com")
+        assert uid1 != uid2
+
+
+class TestItems:
+    def test_insert_and_get(self, storage):
+        item_id = storage.insert_item(
+            url="https://example.com/1",
+            title="Test Story",
+            source="hackernews",
+            author="pg",
+            score=100,
+            fetched_at="2026-01-01T00:00:00",
+        )
+        item = storage.get_item(item_id)
+        assert item is not None
+        assert item["title"] == "Test Story"
+        assert item["score"] == 100
+
+    def test_get_by_url(self, storage):
+        url = "https://example.com/unique"
+        storage.insert_item(url=url, title="T", source="hn", author="a",
+                           score=1, fetched_at="2026-01-01")
+        item = storage.get_item_by_url(url)
+        assert item is not None
+        assert item["url"] == url
+
+    def test_get_nonexistent(self, storage):
+        assert storage.get_item(9999) is None
+
+    def test_get_by_url_nonexistent(self, storage):
+        assert storage.get_item_by_url("https://nope.com") is None
+
+    def test_duplicate_url_returns_existing_id(self, storage):
+        id1 = storage.insert_item(url="https://dup.com", title="A", source="hn",
+                                  author="a", score=1, fetched_at="2026-01-01")
+        id2 = storage.insert_item(url="https://dup.com", title="B", source="hn",
+                                  author="b", score=2, fetched_at="2026-01-02")
+        assert id1 == id2
+
+
+class TestTopics:
+    def test_insert_and_get(self, storage, user_id):
+        tid = storage.insert_topic(user_id, "AI/ML", ["machine learning", "AI"], weight=1.5)
+        topics = storage.get_topics(user_id)
+        assert len(topics) == 1
+        assert topics[0]["name"] == "AI/ML"
+        assert topics[0]["weight"] == 1.5
+        assert "machine learning" in topics[0]["keywords"]
+
+    def test_update_weight(self, storage, user_id):
+        tid = storage.insert_topic(user_id, "Rust", ["rust", "systems"])
+        storage.update_topic_weight(tid, 2.0)
+        topics = storage.get_topics(user_id)
+        assert topics[0]["weight"] == 2.0
+
+    def test_topics_per_user(self, storage):
+        u1 = storage.get_or_create_user("u1")
+        u2 = storage.get_or_create_user("u2")
+        storage.insert_topic(u1, "Topic A", ["a"])
+        storage.insert_topic(u2, "Topic B", ["b"])
+        assert len(storage.get_topics(u1)) == 1
+        assert storage.get_topics(u1)[0]["name"] == "Topic A"
+
+
+class TestFeedback:
+    def test_insert_and_get(self, storage, user_id):
+        item_id = storage.insert_item(url="https://fb.com", title="FB",
+                                      source="hn", author="a", score=1,
+                                      fetched_at="2026-01-01")
+        storage.insert_feedback(user_id, item_id, "read",
+                               metadata={"note": "interesting"})
+        fb = storage.get_feedback(user_id, item_id)
+        assert len(fb) == 1
+        assert fb[0]["action"] == "read"
+        assert fb[0]["metadata"]["note"] == "interesting"
+
+    def test_multiple_feedback(self, storage, user_id):
+        item_id = storage.insert_item(url="https://multi.com", title="M",
+                                      source="hn", author="a", score=1,
+                                      fetched_at="2026-01-01")
+        storage.insert_feedback(user_id, item_id, "delivered")
+        storage.insert_feedback(user_id, item_id, "read")
+        fb = storage.get_feedback(user_id, item_id)
+        assert len(fb) == 2
+
+    def test_get_all_user_feedback(self, storage, user_id):
+        for i in range(3):
+            iid = storage.insert_item(url=f"https://all{i}.com", title=f"T{i}",
+                                      source="hn", author="a", score=1,
+                                      fetched_at="2026-01-01")
+            storage.insert_feedback(user_id, iid, "delivered")
+        fb = storage.get_feedback(user_id)
+        assert len(fb) == 3
+
+
+class TestAuthors:
+    def test_upsert_new(self, storage):
+        storage.upsert_author("newauthor", item_id=1,
+                             topic_scores={"AI/ML": 0.9})
+        authors = storage.get_notable_authors(user_id=1, min_count=1)
+        assert len(authors) == 1
+        assert authors[0]["author_name"] == "newauthor"
+
+    def test_upsert_increments(self, storage):
+        storage.upsert_author("repeat", item_id=1,
+                             topic_scores={"AI/ML": 0.5})
+        storage.upsert_author("repeat", item_id=2,
+                             topic_scores={"AI/ML": 0.8})
+        authors = storage.get_notable_authors(user_id=1, min_count=1)
+        author = [a for a in authors if a["author_name"] == "repeat"][0]
+        assert author["story_count"] == 2
+
+    def test_notable_threshold(self, storage):
+        storage.upsert_author("once", item_id=1, topic_scores={"X": 0.5})
+        # Default min_count=3 should filter this out
+        assert storage.get_notable_authors(user_id=1, min_count=3) == []
+
+
+class TestDigests:
+    def test_insert_and_get(self, storage, user_id):
+        did = storage.insert_digest(user_id, [1, 2, 3], "2026-01-01T12:00:00")
+        history = storage.get_digest_history(user_id)
+        assert len(history) == 1
+        assert history[0]["item_ids"] == [1, 2, 3]
+
+    def test_history_ordering(self, storage, user_id):
+        storage.insert_digest(user_id, [1], "2026-01-01T00:00:00")
+        storage.insert_digest(user_id, [2], "2026-01-02T00:00:00")
+        history = storage.get_digest_history(user_id)
+        assert history[0]["item_ids"] == [2]  # most recent first
+
+    def test_history_limit(self, storage, user_id):
+        for i in range(15):
+            storage.insert_digest(user_id, [i], f"2026-01-{i+1:02d}T00:00:00")
+        history = storage.get_digest_history(user_id, limit=5)
+        assert len(history) == 5

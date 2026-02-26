@@ -8,13 +8,18 @@
 - [ ] **Test full pipeline** - Run digest with engagement, verify output
 - [ ] **Monitor delivery reliability** - Track 7 days of successful 2 PM deliveries
 - [ ] **Review match quality** - Are the semantic matches hitting the right content?
+- [ ] **Track read content** - Provide an option in md file to update the content that was read. Also provide an option for manual comments on the links
+- [ ] **Show yc link** - For the topics of interest, show yc link rather than the article link. Also summarize the comments.
+- [ ] Add unit tests
 
 ## Short-term (This Month)
 
 ### Quality & Tuning
+- [ ] **Use local LLM** - For summarization and any other daily operations, use a local LLM, not remote apis
 - [ ] **Refine topic embeddings** - Adjust if matches drift from intent
 - [ ] **Add topic weights** - Let VB prioritize AI/ML > Parenting > Philosophy, etc.
 - [ ] **Threshold tuning** - Current semantic similarity cutoff may need calibration
+- [ ] **Store feedback** - store the feedback as: opening links, links engaged with, linked stored in the memo db
 
 ### Features
 - [ ] **Thread continuity** - "You saw Story X yesterday, here's an update/follow-up"

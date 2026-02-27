@@ -13,26 +13,49 @@ from storage_interface import get_storage
 
 def parse_read_items(md_text: str) -> list[dict]:
     """
-    Parse checked read-tracker items from digest markdown.
+    Parse checked inline items from digest markdown.
 
-    Returns list of dicts: {'title': str, 'score': int, 'note': str}
+    Looks for lines like:
+        - [x] Story Title
+        - [x] 📰 Story Title
+        - [x] 💬 Story Title
+        - [x] 🔥 Story Title
+
+    Notes are gathered from indented lines below until the next list item.
+
+    Returns list of dicts: {'title': str, 'note': str}
     """
     results = []
     lines = md_text.splitlines()
     i = 0
     while i < len(lines):
         line = lines[i]
-        m = re.match(r'^- \[x\] (.+?) \(↑(\d+)\)\s*$', line, re.IGNORECASE)
+        # Match checked items: - [x] or - [X], optionally with emoji prefix
+        m = re.match(r'^- \[x\]\s+(?:[^\w\s]\s*)*(.+?)\s*$', line, re.IGNORECASE)
         if m:
-            title = m.group(1)
-            score = int(m.group(2))
-            note = ""
-            # Check next line for notes
-            if i + 1 < len(lines):
-                note_match = re.match(r'^\s+Notes:\s*(.*)', lines[i + 1])
+            title = m.group(1).strip()
+            # Collect indented note lines below
+            note_lines = []
+            j = i + 1
+            while j < len(lines) and not lines[j].startswith('- ['):
+                content = lines[j]
+                # Skip metadata lines (score, link, comment summary, action prompt)
+                if re.match(r'^\s+(↑|🔗|💬|→)\s*', content):
+                    j += 1
+                    continue
+                # Strip "Notes: " prefix from first note line
+                note_match = re.match(r'^\s+Notes:\s*(.*)', content)
                 if note_match:
-                    note = note_match.group(1).strip()
-            results.append({'title': title, 'score': score, 'note': note})
+                    text = note_match.group(1).strip()
+                    if text:
+                        note_lines.append(text)
+                elif content.strip():
+                    note_lines.append(content.strip())
+                j += 1
+            note = "\n".join(note_lines).strip()
+            results.append({'title': title, 'note': note})
+            i = j
+            continue
         i += 1
     return results
 

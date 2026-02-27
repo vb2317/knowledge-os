@@ -383,10 +383,11 @@ def format_engagement_section(opportunities: List[Dict]) -> str:
         title = story['title']
         sid = story['id']
         emoji = emoji_map.get(opp['type'], '•')
-        
-        output += f"{emoji} {title}\n"
-        output += f"   → {opp['action_prompt']}\n"
-        output += f"   https://news.ycombinator.com/item?id={sid}\n\n"
+
+        output += f"- [ ] {emoji} {title}\n"
+        output += f"  → {opp['action_prompt']}\n"
+        output += f"  🔗 https://news.ycombinator.com/item?id={sid}\n"
+        output += f"  Notes: \n\n"
     
     return output
 

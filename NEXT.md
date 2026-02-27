@@ -5,12 +5,14 @@
 - [x] **Engagement opportunity detection** - COMPLETE (Feb 20: 5 opps/day, username tracking, comment analysis)
 - [x] **Update digest format** - COMPLETE (🎯 Engagement Opportunities section added)
 - [x] **Engagement tracking schema** - COMPLETE (SQLite tables, auto comment sync)
-- [ ] **Test full pipeline** - Run digest with engagement, verify output
+- [x] **Test full pipeline** — COMPLETE (integration test in tests/test_pipeline_integration.py)
 - [ ] **Monitor delivery reliability** - Track 7 days of successful 2 PM deliveries
 - [ ] **Review match quality** - Are the semantic matches hitting the right content?
-- [ ] **Track read content** - Provide an option in md file to update the content that was read. Also provide an option for manual comments on the links
-- [ ] **Show yc link** - For the topics of interest, show yc link rather than the article link. Also summarize the comments.
-- [ ] Add unit tests
+- [x] **Track read content** — COMPLETE (sync_reading_log.py + Read Tracker section in digest)
+- [x] **Show yc link** — COMPLETE (HN discussion links + 💬 comment keyword summaries)
+- [x] **Add unit tests** — COMPLETE (4 test files in tests/ covering process_digest, storage, engagement, sync_reading_log)
+- [x] **Add other sources** — COMPLETE (Substack RSS via fetch_substack.py, config-driven feeds)
+- [ ] **Run tests in PR builds** - Unit and integration tests should be run as part of PR builder
 
 ## Short-term (This Month)
 

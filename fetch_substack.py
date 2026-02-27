@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""
+Fetch articles from Substack RSS feeds.
+Output JSON to stdout in the same schema as fetch_stories.py.
+"""
+import hashlib
+import json
+import sys
+from datetime import datetime
+from typing import List, Dict
+
+import feedparser
+
+
+def _stable_id(url: str) -> int:
+    """Generate a stable numeric ID from a URL (positive 32-bit int)."""
+    return int(hashlib.sha256(url.encode()).hexdigest()[:8], 16)
+
+
+def fetch_feed(feed_url: str, max_items: int = 10) -> List[Dict]:
+    """Fetch and normalize entries from a single Substack RSS feed."""
+    feed = feedparser.parse(feed_url)
+    stories = []
+
+    for entry in feed.entries[:max_items]:
+        url = entry.get("link", "")
+        if not url:
+            continue
+
+        # Parse publish time
+        published = entry.get("published_parsed")
+        if published:
+            ts = int(datetime(*published[:6]).timestamp())
+        else:
+            ts = 0
+
+        stories.append({
+            "id": _stable_id(url),
+            "title": entry.get("title", ""),
+            "url": url,
+            "score": 0,
+            "by": entry.get("author", feed.feed.get("title", "unknown")),
+            "time": ts,
+            "descendants": 0,
+            "text": entry.get("summary", ""),
+            "source": "substack",
+            "fetched_at": datetime.now().isoformat(),
+        })
+
+    return stories
+
+
+def fetch_all_feeds(config: Dict) -> List[Dict]:
+    """Fetch stories from all configured Substack feeds."""
+    substack_cfg = config.get("sources", {}).get("substack", {})
+    if not substack_cfg.get("enabled", False):
+        return []
+
+    feeds = substack_cfg.get("feeds", [])
+    max_items = substack_cfg.get("max_items", 10)
+
+    all_stories = []
+    for feed_url in feeds:
+        try:
+            stories = fetch_feed(feed_url, max_items=max_items)
+            all_stories.extend(stories)
+            print(f"Fetched {len(stories)} items from {feed_url}", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Failed to fetch {feed_url}: {e}", file=sys.stderr)
+
+    return all_stories
+
+
+if __name__ == "__main__":
+    config_path = sys.argv[1] if len(sys.argv) > 1 else "config.json"
+    with open(config_path) as f:
+        config = json.load(f)
+
+    stories = fetch_all_feeds(config)
+    print(json.dumps(stories, indent=2))

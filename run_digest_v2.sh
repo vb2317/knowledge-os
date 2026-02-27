@@ -6,13 +6,25 @@ set -e
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$DIR"
 
-PYTHON=/usr/bin/python3
+PYTHON="$DIR/venv/bin/python"
 
 echo "🦅 Fetching HN stories..." >&2
 $PYTHON fetch_stories.py > stories_raw.json
 
+# Fetch Substack if enabled in config
+echo "📰 Fetching Substack feeds..." >&2
+$PYTHON fetch_substack.py > substack_raw.json 2>/dev/null || echo "[]" > substack_raw.json
+
+# Merge HN + Substack stories into a single JSON array
+$PYTHON -c "
+import json
+hn = json.load(open('stories_raw.json'))
+ss = json.load(open('substack_raw.json'))
+json.dump(hn + ss, open('all_stories.json', 'w'))
+"
+
 echo "🎯 Processing and generating digest..." >&2
-$PYTHON process_digest.py stories_raw.json > digest.txt
+$PYTHON process_digest.py all_stories.json > digest.txt
 
 echo "📱 Digest ready!" >&2
 cat digest.txt

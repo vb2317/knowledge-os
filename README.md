@@ -61,10 +61,12 @@ Daily curated Hacker News stories delivered via WhatsApp at 2 PM, personalized t
 
 ## System Components
 
-### 1. Story Fetching (`fetch_stories.py`)
-- **Input:** HN topstories API
-- **Output:** `stories_raw.json` (100 stories with metadata)
-- **Fields:** id, title, url, score, by (author), descendants (comment count), time
+### 1. Story Fetching (`fetch_stories.py`, `fetch_substack.py`)
+- **HN Input:** HN topstories API → `stories_raw.json`
+- **Substack Input:** RSS feeds (configured in `config.json` under `sources.substack`) → `substack_raw.json`
+- **Output:** Merged `all_stories.json` with uniform schema
+- **Fields:** id, title, url, score, by (author), descendants (comment count), time, source
+- **Substack stories** get `score: 0`, `descendants: 0`, and `source: "substack"` (marked with 📰 in digest)
 
 ### 2. Topic Matching (`match_topics.py`)
 - **Method:** Semantic similarity (sentence-transformers)
@@ -235,6 +237,7 @@ knowledge-os/
 │
 ├── Core Pipeline
 ├── fetch_stories.py             # HN API fetcher
+├── fetch_substack.py            # Substack RSS fetcher
 ├── match_topics.py              # Semantic topic matcher
 ├── process_digest.py            # Main orchestration
 ├── engagement.py                # Engagement detection + tracking
@@ -251,7 +254,8 @@ knowledge-os/
 ├── send_engagement_summary.sh   # Summary delivery wrapper
 │
 ├── Testing
-├── test_engagement.sh           # Engagement module tests
+├── tests/                       # pytest test suite (7 test files)
+├── test_engagement.sh           # Engagement module tests (legacy)
 │
 ├── Data
 ├── hn_digest_v2.db              # SQLite database
@@ -397,6 +401,12 @@ Review:
 ---
 
 ## Recent Updates
+
+**2026-02-27:** Multi-source support + test coverage
+- Substack RSS fetcher (`fetch_substack.py`) with config-driven feeds
+- 📰 source indicator in digest for Substack articles
+- Pipeline integration test (`tests/test_pipeline_integration.py`)
+- Read tracker, YC links, and unit tests marked complete in roadmap
 
 **2026-02-20:** Engagement detection integrated + digest archive restructure
 - 5 opportunities/day (Ask/Show HN, early threads, debates)

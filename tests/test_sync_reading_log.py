@@ -8,26 +8,45 @@ SAMPLE_DIGEST = """\
 _3 stories worth your attention_
 
 *AI/ML*
-• Cool AI Tool
+- [x] Cool AI Tool
   ↑200 | 50 comments | by alice
+  💬 Discussing: transformers, scaling
   🔗 https://news.ycombinator.com/item?id=1
-
-*Systems*
-• Rust is Fast
+  Notes: Really impressive demo
+- [ ] Rust is Fast
   ↑150 | 30 comments | by bob
   🔗 https://news.ycombinator.com/item?id=2
+  Notes:
+
+🎯 *Engagement Opportunities*
+
+- [x] 💬 Show HN: My Project
+  → Someone built something. 80 comments.
+  🔗 https://news.ycombinator.com/item?id=3
+  Notes:
+- [ ] 🔥 Hot Debate Topic
+  → Active debate (200 comments).
+  🔗 https://news.ycombinator.com/item?id=4
+  Notes:
 
 _Keep building. The frontier moves forward._
+"""
 
----
-## 📖 Read Tracker
-_Mark what you read, add notes if you like_
-
-- [x] Cool AI Tool (↑200)
-  Notes: Really impressive demo
-- [ ] Rust is Fast (↑150)
+MULTILINE_NOTES = """\
+*AI/ML*
+- [x] LLM Deep Dive
+  ↑126 | 153 comments | by qsi
+  🔗 https://news.ycombinator.com/item?id=5
   Notes:
-- [x] Show HN: My Project (↑80)
+
+  IMO, the writer is overzealous with their comments.
+
+  > They aren't perfect, but it looks like magic.
+
+  I won't be surprised if the next version outperforms their output.
+
+- [ ] Another Story
+  ↑50 | 10 comments | by someone
   Notes:
 """
 
@@ -43,11 +62,11 @@ class TestParseReadItems:
         assert "Cool AI Tool" in titles
         assert "Show HN: My Project" in titles
 
-    def test_extracts_scores(self):
+    def test_unchecked_items_skipped(self):
         items = parse_read_items(SAMPLE_DIGEST)
-        by_title = {i["title"]: i for i in items}
-        assert by_title["Cool AI Tool"]["score"] == 200
-        assert by_title["Show HN: My Project"]["score"] == 80
+        titles = [i["title"] for i in items]
+        assert "Rust is Fast" not in titles
+        assert "Hot Debate Topic" not in titles
 
     def test_extracts_notes(self):
         items = parse_read_items(SAMPLE_DIGEST)
@@ -55,12 +74,14 @@ class TestParseReadItems:
         assert by_title["Cool AI Tool"]["note"] == "Really impressive demo"
         assert by_title["Show HN: My Project"]["note"] == ""
 
-    def test_unchecked_items_skipped(self):
-        items = parse_read_items(SAMPLE_DIGEST)
-        titles = [i["title"] for i in items]
-        assert "Rust is Fast" not in titles
+    def test_multiline_notes(self):
+        items = parse_read_items(MULTILINE_NOTES)
+        assert len(items) == 1
+        assert items[0]["title"] == "LLM Deep Dive"
+        assert "overzealous" in items[0]["note"]
+        assert "outperforms" in items[0]["note"]
 
-    def test_no_tracker_section(self):
+    def test_no_tracker_items(self):
         md = "# Just a heading\nSome text\n"
         assert parse_read_items(md) == []
 
@@ -68,7 +89,19 @@ class TestParseReadItems:
         assert parse_read_items("") == []
 
     def test_case_insensitive_checkbox(self):
-        md = "- [X] Title Here (↑42)\n  Notes: \n"
+        md = "- [X] Title Here\n  Notes: \n"
         items = parse_read_items(md)
         assert len(items) == 1
         assert items[0]["title"] == "Title Here"
+
+    def test_emoji_prefix_stripped(self):
+        md = "- [x] 📰 Substack Article\n  Notes: Good read\n"
+        items = parse_read_items(md)
+        assert len(items) == 1
+        assert items[0]["title"] == "Substack Article"
+        assert items[0]["note"] == "Good read"
+
+    def test_engagement_emoji_stripped(self):
+        md = "- [x] 🔥 Hot Take on AI\n  Notes: \n"
+        items = parse_read_items(md)
+        assert items[0]["title"] == "Hot Take on AI"

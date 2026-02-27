@@ -165,18 +165,19 @@ class TestGenerateDigestText:
         })
         assert "⭐" in result
 
-    def test_read_tracker_present(self):
+    def test_inline_checkbox_on_stories(self):
         story = self._make_story()
         result = generate_digest_text({
             "stories": [story],
             "notable_authors": [],
             "engagement_opportunities": [],
         })
-        assert "## 📖 Read Tracker" in result
-        assert "- [ ] Test Story (↑100)" in result
+        assert "- [ ] Test Story" in result
         assert "  Notes: " in result
+        # No separate read tracker section
+        assert "## 📖 Read Tracker" not in result
 
-    def test_read_tracker_includes_engagement(self):
+    def test_no_separate_read_tracker(self):
         story = self._make_story(title="Main Story")
         eng_story = self._make_story(title="Engagement Story", id=99999)
         result = generate_digest_text({
@@ -186,7 +187,7 @@ class TestGenerateDigestText:
                                           "score": 0.8, "action_prompt": "Go!"}],
         })
         assert "- [ ] Main Story" in result
-        assert "- [ ] Engagement Story" in result
+        assert "## 📖 Read Tracker" not in result
 
     def test_multiple_topics_grouped(self):
         s1 = self._make_story(title="AI thing", topic="AI/ML")

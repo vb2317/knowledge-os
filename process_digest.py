@@ -138,7 +138,7 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
         item_id = storage.insert_item(
             url=story['url'],
             title=story['title'],
-            source='hackernews',
+            source=story.get('source', 'hackernews'),
             author=story['by'],
             score=story['score'],
             fetched_at=story['fetched_at']
@@ -278,15 +278,19 @@ def generate_digest_text(result: Dict) -> str:
             # Comment count display
             comment_str = f"{descendants} comments" if descendants else "0 comments"
 
-            lines.append(f"• {title}")
+            source_icon = "📰 " if story.get('source') == 'substack' else ""
+            lines.append(f"- [ ] {source_icon}{title}")
             lines.append(f"  ↑{score} | {comment_str} | by {author}{author_marker}")
             if comment_summary:
                 lines.append(f"  💬 {comment_summary}")
-            # Use HN discussion link instead of article URL
-            if story_id:
+            # Use HN discussion link for HN stories, article URL for other sources
+            if story.get('source') == 'substack':
+                lines.append(f"  🔗 {story.get('url', '')}")
+            elif story_id:
                 lines.append(f"  🔗 https://news.ycombinator.com/item?id={story_id}")
             else:
                 lines.append(f"  🔗 {story.get('url', '')}")
+            lines.append(f"  Notes: ")
         
         lines.append("")  # Blank line between topics
     
@@ -306,25 +310,6 @@ def generate_digest_text(result: Dict) -> str:
     
     # Footer
     lines.append("_Keep building. The frontier moves forward._")
-
-    # Read tracker section
-    all_trackable = list(stories)
-    for opp in engagement_opportunities:
-        opp_story = opp.get('story', {})
-        if opp_story.get('title') and opp_story not in stories:
-            all_trackable.append(opp_story)
-
-    if all_trackable:
-        lines.append("")
-        lines.append("---")
-        lines.append("## 📖 Read Tracker")
-        lines.append("_Mark what you read, add notes if you like_")
-        lines.append("")
-        for story in all_trackable:
-            title = story['title']
-            score = story.get('score', 0)
-            lines.append(f"- [ ] {title} (↑{score})")
-            lines.append("  Notes: ")
 
     return "\n".join(lines)
 

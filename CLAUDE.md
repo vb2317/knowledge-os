@@ -1,6 +1,6 @@
 # knowledge-os
 
-HN digest pipeline that fetches stories, matches to user topics via semantic similarity, detects engagement opportunities, and delivers daily digests.
+Multi-source digest pipeline that fetches stories from HN and Substack RSS, matches to user topics via semantic similarity, detects engagement opportunities, and delivers daily digests.
 
 ## Commands
 
@@ -29,14 +29,16 @@ venv/bin/python engagement_summary.py
 ## Architecture
 
 ```
-fetch_stories.py → process_digest.py → knos-digest/YYYY-MM-DD.md
-                        ↓
+fetch_stories.py ──┐
+                   ├→ process_digest.py → knos-digest/YYYY-MM-DD.md
+fetch_substack.py ─┘        ↓
                   storage_sqlite.py (SQLite via storage_interface.py ABC)
-                        ↓
+                             ↓
                   engagement.py (opportunity detection, comment sync)
 ```
 
-- `config.json` — single source for topics, user, storage config, thresholds
+- `config.json` — single source for topics, user, sources, storage config, thresholds
+- `fetch_substack.py` — RSS fetcher for Substack feeds (config-driven, `feedparser` library)
 - `storage_interface.py` — abstract base; `storage_sqlite.py` implements it
 - `match_topics.py` — sentence-transformers semantic matching (heavy import, avoid in tests)
 

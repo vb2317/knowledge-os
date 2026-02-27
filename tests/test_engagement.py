@@ -120,6 +120,8 @@ class TestFormatEngagementSection:
         assert "Ask HN: Testing?" in result
         assert "Share your thoughts!" in result
         assert "123" in result
+        assert "- [ ]" in result
+        assert "Notes: " in result
 
     def test_emoji_mapping(self):
         types_emojis = [("ask_show", "💬"), ("early", "🎯"), ("debate", "🔥")]

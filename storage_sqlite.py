@@ -267,37 +267,57 @@ class SQLiteStorage(StorageInterface):
     def upsert_author(self, author_name: str, item_id: int, topic_scores: Dict[str, float]):
         conn = self._get_conn()
         c = conn.cursor()
-        
+
+        # Deduplicate: only count each item once per author
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS author_items (
+                author_name TEXT NOT NULL,
+                item_id INTEGER NOT NULL,
+                PRIMARY KEY (author_name, item_id)
+            )
+        ''')
+        c.execute('''
+            INSERT OR IGNORE INTO author_items (author_name, item_id)
+            VALUES (?, ?)
+        ''', (author_name, item_id))
+        is_new_item = c.rowcount > 0
+
         # Get existing author
         c.execute('SELECT * FROM authors WHERE author_name = ?', (author_name,))
         existing = c.fetchone()
-        
+
         if existing:
-            # Update
             existing_topics = json.loads(existing['topics']) if existing['topics'] else {}
-            
-            # Merge topic scores
+
             for topic, score in topic_scores.items():
                 if topic in existing_topics:
                     existing_topics[topic] = max(existing_topics[topic], score)
                 else:
                     existing_topics[topic] = score
-            
-            c.execute('''
-                UPDATE authors
-                SET story_count = story_count + 1,
-                    total_score = total_score + ?,
-                    topics = ?,
-                    last_seen = CURRENT_TIMESTAMP
-                WHERE author_name = ?
-            ''', (max(topic_scores.values()), json.dumps(existing_topics), author_name))
+
+            if is_new_item:
+                c.execute('''
+                    UPDATE authors
+                    SET story_count = story_count + 1,
+                        total_score = total_score + ?,
+                        topics = ?,
+                        last_seen = CURRENT_TIMESTAMP
+                    WHERE author_name = ?
+                ''', (max(topic_scores.values()), json.dumps(existing_topics), author_name))
+            else:
+                c.execute('''
+                    UPDATE authors
+                    SET topics = ?,
+                        last_seen = CURRENT_TIMESTAMP
+                    WHERE author_name = ?
+                ''', (json.dumps(existing_topics), author_name))
         else:
-            # Insert
+            # Insert new author
             c.execute('''
                 INSERT INTO authors (author_name, story_count, total_score, topics)
                 VALUES (?, 1, ?, ?)
             ''', (author_name, max(topic_scores.values()), json.dumps(topic_scores)))
-        
+
         conn.commit()
         conn.close()
     

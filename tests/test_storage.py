@@ -140,6 +140,15 @@ class TestAuthors:
         author = [a for a in authors if a["author_name"] == "repeat"][0]
         assert author["story_count"] == 2
 
+    def test_duplicate_item_no_inflate(self, storage):
+        """Same item_id called multiple times should not inflate story_count."""
+        storage.upsert_author("dup", item_id=1, topic_scores={"AI/ML": 0.5})
+        storage.upsert_author("dup", item_id=1, topic_scores={"AI/ML": 0.5})
+        storage.upsert_author("dup", item_id=1, topic_scores={"AI/ML": 0.5})
+        authors = storage.get_notable_authors(user_id=1, min_count=1)
+        author = [a for a in authors if a["author_name"] == "dup"][0]
+        assert author["story_count"] == 1
+
     def test_notable_threshold(self, storage):
         storage.upsert_author("once", item_id=1, topic_scores={"X": 0.5})
         # Default min_count=3 should filter this out

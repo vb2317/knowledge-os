@@ -53,6 +53,9 @@ venv/bin/python sync_reading_log.py knos-digest/2026-02-27.md
 
 # Generate engagement summary
 venv/bin/python engagement_summary.py
+
+# Run local dashboard
+venv/bin/python -m streamlit run dashboard.py
 ```
 
 ---
@@ -137,6 +140,20 @@ _Keep building. The frontier moves forward._
 - **`run_digest_v2.sh`** — full pipeline: fetch all sources, merge, process, archive
 - **`daily_digest.sh`** — cron wrapper (2 PM)
 - **`engagement_summary.py`** — morning reflection (9 AM)
+
+### Dashboard (`dashboard.py`)
+Local Streamlit app for visibility into pipeline state, config management, and ad-hoc queries.
+
+```bash
+venv/bin/python -m streamlit run dashboard.py
+```
+
+Five tabs:
+- **Overview** — item counts by source, digest history, items-by-topic bar chart, engagement stats
+- **Config** — edit topics (keywords, weights), sources (feeds, toggles), and pipeline settings; writes directly to `config.json`
+- **Stories** — filter items by source, date, score, topic, and author; expandable topic scores per row
+- **Authors** — sortable author table with topic affinity tags
+- **Simulator** — paste a URL or text, run it through the topic matcher, preview how it would appear in a digest
 
 ---
 

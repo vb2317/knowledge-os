@@ -1,8 +1,8 @@
-# HN Digest - Architecture Documentation
+# knowledge-os — Architecture
 
 ## Overview
 
-Scalable content recommendation system with pluggable storage backend.
+Multi-source digest pipeline with semantic topic matching, engagement detection, read tracking, and a local dashboard.
 
 **Current:** Single-user SQLite
 **Future:** Multi-user Postgres (swap via config)
@@ -33,7 +33,7 @@ items (
     item_id: PK,
     url: UNIQUE,
     title,
-    source: (hackernews|reddit|etc),
+    source: (hackernews|substack),
     author,
     score,
     fetched_at,
@@ -154,22 +154,31 @@ storage = get_storage(backend="postgres", host="...", ...)
 ## Data Flow
 
 ```
-1. Fetch stories (fetch_stories.py)
-   → stories_raw.json
+1. Fetch stories
+   fetch_stories.py   → HN API (hackernews source)
+   fetch_substack.py  → RSS feeds (substack source)
+   Merged             → all_stories.json
 
 2. Process (process_digest.py)
    → Load config
    → Get/create user
    → Initialize topics (if needed)
-   → Match stories to topics (embeddings)
-   → Insert items
-   → Insert item-topic scores
+   → Match stories to topics (sentence-transformer embeddings)
+   → Insert items + item-topic scores
    → Update author stats
    → Record digest delivery
-   → Generate digest text
+   → Fetch comment summaries (engagement.py)
+   → Detect engagement opportunities (engagement.py)
+   → Generate digest markdown
 
 3. Deliver
-   → WhatsApp via message tool
+   → knos-digest/YYYY-MM-DD.md (archive)
+   → WhatsApp via OpenClaw gateway
+
+4. Post-delivery
+   → sync_reading_log.py  — mark read items from digest
+   → engagement_summary.py — daily engagement reflection
+   → dashboard.py (streamlit) — local observability UI
 ```
 
 ## Configuration
@@ -213,7 +222,7 @@ storage = get_storage(backend="postgres", host="...", ...)
 - Redis caching layer
 - Background workers (Celery)
 - Vector DB (Pinecone/Weaviate) for semantic search
-- Analytics dashboard
+- Analytics dashboard ✅ (Streamlit, local)
 
 ## Future Enhancements
 
@@ -277,14 +286,17 @@ GET /api/analytics/topics
 ## Testing
 
 ```bash
-# Test new storage layer
-python3 -c "from storage_sqlite import SQLiteStorage; s = SQLiteStorage(':memory:'); s.init_schema(); print('OK')"
+# Run all tests
+venv/bin/python -m pytest tests/ -v
 
 # Test full pipeline
 bash run_digest_v2.sh
 
 # Check database
 sqlite3 hn_digest_v2.db "SELECT COUNT(*) FROM items"
+
+# Local dashboard
+venv/bin/python -m streamlit run dashboard.py
 ```
 
 ## Monitoring

@@ -1,7 +1,7 @@
 # Sample Digest Output
 
-**Last updated:** 2026-02-20  
-**Test run:** Full pipeline with engagement detection
+**Last updated:** 2026-03-01
+**Test run:** Full pipeline with engagement detection, comment summaries, Substack source
 
 ---
 
@@ -14,21 +14,28 @@ _4 stories worth your attention_
 💡 *Signal:* Authors you're tracking posted today.
 
 *AI/ML/LLMs*
-• Measuring AI agent autonomy in practice
-  ↑105 by jbredeche
-  https://www.anthropic.com/research/measuring-agent-autonomy
-  
-• Don't Trust the Salt: AI Summarization, Multilingual Safety, and LLM Guardrails
-  ↑211 by benbreen
-  https://royapakzad.substack.com/p/multilingual-llm-evaluation-to-guardrails
-  
-• Consistency diffusion language models: Up to 14x faster, no quality loss
-  ↑102 by zagwdt
-  https://www.together.ai/blog/consistency-diffusion-language-models
-  
-• An AI Agent Published a Hit Piece on Me – The Operator Came Forward
-  ↑366 by scottshambaugh ⭐
-  https://theshamblog.com/an-ai-agent-wrote-a-hit-piece-on-me-part-4/
+- [ ] Measuring AI agent autonomy in practice
+  ↑105 | 87 comments | by jbredeche
+  💬 Discussing: autonomy, evaluation, agents
+  🔗 https://news.ycombinator.com/item?id=47075001
+  Notes:
+
+- [ ] 📰 How to Sound Like an Expert in Any AI Bubble Debate
+  ↑0 | 0 comments | by Derek Thompson
+  🔗 https://www.derekthompson.org/p/how-to-sound-like-an-expert-in-any
+  Notes:
+
+- [ ] Consistency diffusion language models: Up to 14x faster, no quality loss
+  ↑102 | 43 comments | by zagwdt
+  💬 Discussing: inference, speed, models
+  🔗 https://news.ycombinator.com/item?id=47075002
+  Notes:
+
+- [ ] An AI Agent Published a Hit Piece on Me – The Operator Came Forward
+  ↑366 | 302 comments | by scottshambaugh ⭐
+  💬 Discussing: agents, operators, accountability
+  🔗 https://news.ycombinator.com/item?id=47083145
+  Notes:
 
 
 🎯 *Engagement Opportunities*
@@ -65,9 +72,9 @@ _Keep building. The frontier moves forward._
 ## Section Breakdown
 
 ### 📚 Matched Stories
-- **Format:** Topic heading, then stories
-- **Fields:** Title, score (↑), author, URL
-- **Marker:** ⭐ for notable/tracked authors
+- **Format:** Topic heading, then stories with inline `[ ]` checkboxes for read tracking
+- **Fields:** Title, score (↑), comment count, author, optional comment summary (💬), URL
+- **Marker:** ⭐ for notable/tracked authors; 📰 for Substack items
 - **Limit:** Max 5 per topic
 
 ### 🎯 Engagement Opportunities (NEW)
@@ -95,8 +102,8 @@ _Keep building. The frontier moves forward._
 **Database:**  
 `hn_digest_v2.db` (stories, topics, authors, engagement opportunities)
 
-**Raw stories:**  
-`stories_raw.json` (last fetch, 100 stories from HN)
+**Raw stories:**
+`all_stories.json` (merged HN + Substack, last pipeline run)
 
 ---
 

@@ -6,13 +6,15 @@
 - [x] **Update digest format** - COMPLETE (🎯 Engagement Opportunities section added)
 - [x] **Engagement tracking schema** - COMPLETE (SQLite tables, auto comment sync)
 - [x] **Test full pipeline** — COMPLETE (integration test in tests/test_pipeline_integration.py)
-- [ ] **Monitor delivery reliability** - Track 7 days of successful 2 PM deliveries
+- [x] **Monitor delivery reliability** - Track 7 days of successful 2 PM deliveries
 - [ ] **Review match quality** - Are the semantic matches hitting the right content?
+- [ ] **Weekly trending topics analysis** For this drive page, track the substacks and summarize https://docs.google.com/spreadsheets/d/18nQixal03lXHCv99lzQj2zLtW8FGFBoV4wqrqE2_yrY/edit?gid=0#gid=0
 - [x] **Track read content** — COMPLETE (sync_reading_log.py + Read Tracker section in digest)
 - [x] **Show yc link** — COMPLETE (HN discussion links + 💬 comment keyword summaries)
 - [x] **Add unit tests** — COMPLETE (4 test files in tests/ covering process_digest, storage, engagement, sync_reading_log)
 - [x] **Add other sources** — COMPLETE (Substack RSS via fetch_substack.py, config-driven feeds)
 - [ ] **Run tests in PR builds** - Unit and integration tests should be run as part of PR builder
+- [x] **build a dashboard** — COMPLETE (2026-03-01: Streamlit app, 5 tabs: Overview, Config, Stories, Authors, Simulator; `streamlit run dashboard.py`)
 
 ## Short-term (This Month)
 

@@ -137,7 +137,7 @@ _Daily reflection · track engagement patterns_
 ### 1. Create Summary Script ✅
 `engagement_summary.py` (created above)
 
-### 2. Create Delivery Wrapper
+### 2. Create Delivery Wrapper ✅
 ```bash
 #!/bin/bash
 # send_engagement_summary.sh
@@ -151,7 +151,7 @@ if [ "$SUMMARY" != "NO_SUMMARY" ]; then
 fi
 ```
 
-### 3. Add Cron Job (5 PM)
+### 3. Add Cron Job (5 PM) ✅
 ```json
 {
   "name": "Engagement Summary - 5 PM Daily",
@@ -169,10 +169,10 @@ fi
 }
 ```
 
-### 4. Test Manually
+### 4. Test Manually ✅
 ```bash
 cd /Users/vb/.openclaw/workspace/knowledge-os
-python3 engagement_summary.py
+venv/bin/python engagement_summary.py
 ```
 
 ---
@@ -181,10 +181,11 @@ python3 engagement_summary.py
 
 ```
 knowledge-os/
-├── engagement_summary.py       # Summary generator (NEW)
-├── send_engagement_summary.sh  # Delivery wrapper (NEW)
+├── engagement_summary.py       # Summary generator
+├── send_engagement_summary.sh  # Delivery wrapper
 ├── engagement.py               # Main engagement module
 ├── process_digest.py           # Digest pipeline
+├── dashboard.py                # Local Streamlit observability UI
 └── hn_digest_v2.db            # Shared database
 ```
 

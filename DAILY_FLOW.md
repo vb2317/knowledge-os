@@ -39,10 +39,10 @@ _Keep building. The frontier moves forward._
 
 ---
 
-## Message 2: Engagement Summary (5:00 PM)
+## Message 2: Engagement Summary (5:00 PM or 9:00 AM next day)
 
-**Purpose:** Reflect on today's HN engagement so far  
-**Frequency:** Only when digest ran today  
+**Purpose:** Reflect on today's HN engagement
+**Frequency:** Only when digest ran and engagement occurred
 **Format:**
 
 ```
@@ -82,72 +82,24 @@ _Daily reflection · track engagement patterns_
 - 📈 7-day engagement trend + tips
 
 **When skipped:**
-- No digest ran yesterday
-- No engagement yesterday (0 comments)
-
----
-
-## Message 2: HN Digest (2:00 PM)
-
-**Purpose:** Discover today's HN opportunities  
-**Frequency:** Daily  
-**Format:**
-
-```
-🦅 *HN Digest* - Afternoon Energy Boost
-_7 stories worth your attention_
-
-*AI/ML/LLMs*
-• Cord: Coordinating Trees of AI Agents
-  ↑87 by gfortaine
-  https://www.june.kim/cord
-
-• Ggml.ai joins Hugging Face
-  ↑733 by lairv
-  https://github.com/ggml-org/llama.cpp/discussions/19759
-
-*Parenting/Education*
-• Child's Play: Tech's new generation
-  ↑374 by ramimac
-  https://harpers.org/archive/2026/03/...
-
-🎯 *Engagement Opportunities*
-
-💬 Show HN: Native macOS HN client
-   → Someone built something. 148 comments. Feedback?
-   https://news.ycombinator.com/item?id=47088166
-
-🔥 Turn Dependabot off
-   → Active debate (115 comments). Clarity?
-   https://news.ycombinator.com/item?id=47094192
-
-_Keep building. The frontier moves forward._
-```
-
-**What it shows:**
-- 📚 Stories matched to your topics (AI/ML, Data Science, etc.)
-- 🎯 5 engagement opportunities (Ask/Show HN, early, debates)
-- ⭐ Notable authors you're tracking
-
-**When skipped:**
-- Never (always runs daily)
-- Shows "quiet day" if no matches
+- No digest ran today
+- No engagement today (0 comments)
 
 ---
 
 ## Why Separate?
 
 ### Different Purposes
-- **Summary (AM):** Reflection, learning, calibration
-- **Digest (PM):** Discovery, action, opportunities
+- **Summary (PM/next AM):** Reflection, learning, calibration
+- **Digest (2 PM):** Discovery, action, opportunities
 
 ### Different Frequencies
 - **Summary:** Only when you engage (0-3x/week)
 - **Digest:** Every day (7x/week)
 
 ### Different Timing
-- **Summary:** Morning sets tone for day
-- **Digest:** Afternoon catches hot stories
+- **Summary:** After engagement window (5 PM same day or 9 AM next day)
+- **Digest:** 2 PM catches stories while hot
 
 ### Different Actions
 - **Summary:** Review, reflect, adjust strategy
@@ -158,32 +110,30 @@ _Keep building. The frontier moves forward._
 ## Sample Weekly Flow
 
 ### Monday
-- **9 AM:** *(no summary - didn't engage Sunday)*
 - **2 PM:** Digest arrives, 5 opportunities
 - **Action:** Engage with 1 Ask HN
+- **5 PM:** Summary shows today's engagement (20% rate)
 
 ### Tuesday
-- **9 AM:** Summary shows Monday's engagement (20% rate)
 - **2 PM:** Digest arrives, 5 opportunities
 - **Action:** Skip, nothing interesting
 
-### Wednesday  
-- **9 AM:** *(no summary - didn't engage Tuesday)*
+### Wednesday
 - **2 PM:** Digest arrives, 5 opportunities
 - **Action:** Engage with 2 debates
+- **5 PM:** Summary shows today's engagement (40% rate)
 
 ### Thursday
-- **9 AM:** Summary shows Wednesday's engagement (40% rate)
 - **2 PM:** Digest arrives, 5 opportunities
 - **Action:** Engage with 1 Show HN
+- **5 PM:** Summary shows today's engagement
 
 ### Friday
-- **9 AM:** Summary shows Thursday's engagement
 - **2 PM:** Digest arrives, 5 opportunities
 - **Action:** Engage with 1 early thread
+- **5 PM:** Summary shows today's engagement
 
 ### Saturday
-- **9 AM:** Summary shows Friday's engagement
 - **2 PM:** Digest arrives, 5 opportunities
 - **Reflection:** 4/7 days engaged, 7/35 opportunities (20%)
 
@@ -210,8 +160,8 @@ _Keep building. The frontier moves forward._
 
 | Aspect | Engagement Summary | HN Digest |
 |--------|-------------------|-----------|
-| **Time** | 9:00 AM | 2:00 PM |
-| **Focus** | Past (yesterday) | Present (today) |
+| **Time** | 5:00 PM (same day) | 2:00 PM |
+| **Focus** | Past (today so far) | Present (today) |
 | **Purpose** | Reflection | Discovery |
 | **Frequency** | Conditional | Daily |
 | **Tone** | Analytical | Motivational |
@@ -225,7 +175,7 @@ _Keep building. The frontier moves forward._
 **Summary:**
 - Generator: `engagement_summary.py`
 - Wrapper: `send_engagement_summary.sh`
-- Cron: 9 AM daily (isolated session)
+- Cron: 5 PM daily (isolated session)
 
 **Digest:**
 - Generator: `process_digest.py`
@@ -257,14 +207,13 @@ _Keep building. The frontier moves forward._
 
 ### Adjust Timing
 
-**Morning summary:**
-- 8 AM: Earlier reflection
-- 9 AM: Standard (recommended)
-- 10 AM: After morning routine
+**Same-day summary:**
+- 5 PM: Standard (recommended) — 3h window after digest
+- 6 PM: Later if you need more time to engage
 
-**Evening summary:**
-- 9 PM: End-of-day recap
-- Not recommended (less actionable)
+**Next-morning summary (alternative):**
+- 9 AM: Morning sets tone for day
+- Tradeoff: delayed feedback vs fresh start
 
 ---
 

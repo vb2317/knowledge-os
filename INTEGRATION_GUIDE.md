@@ -1,5 +1,7 @@
 # Integration Guide: Engagement Features
 
+> **Status (2026-03-01):** This guide is historical. Engagement detection is fully integrated into `process_digest.py` via `engagement.py`. The instructions below describe what was done during initial integration — kept for reference.
+
 ## Quick Start (15 minutes)
 
 ### 1. Add Engagement Detection to Digest Pipeline

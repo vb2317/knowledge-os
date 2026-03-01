@@ -186,18 +186,22 @@ Review: March 20, 2026
 ## Files
 
 **Core:**
-- `engagement.py` - Detection, tracking, reporting
-- `process_digest.py` - Main pipeline (integration point)
-- `hn_digest_v2.db` - SQLite storage
+- `engagement.py` — Detection, tracking, comment sync
+- `engagement_summary.py` — Daily reflection report
+- `process_digest.py` — Main pipeline (integration point)
+- `hn_digest_v2.db` — SQLite storage
+
+**Observability:**
+- `dashboard.py` — Streamlit UI (`streamlit run dashboard.py`)
 
 **Documentation:**
-- `ENGAGEMENT_PLAN.md` - This file
-- `ENGAGEMENT.md` - Full strategy (Feb 16)
-- `INTEGRATION_GUIDE.md` - Technical integration guide (Feb 16)
-- `NEXT.md` - Roadmap
+- `ENGAGEMENT_PLAN.md` — This file
+- `ENGAGEMENT.md` — Full strategy
+- `INTEGRATION_GUIDE.md` — Historical integration notes
+- `NEXT.md` — Roadmap
 
 **Testing:**
-- `test_engagement.sh` - Verification script
+- `tests/test_engagement.py` — Unit tests
 
 ---
 
@@ -212,12 +216,12 @@ Review: March 20, 2026
 
 ## Next Steps
 
-1. **Run test:** `./test_engagement.sh`
-2. **Review output:** Check digest format, opportunities
-3. **Adjust if needed:** Scoring, volume, prompts
-4. **Go live:** Daily digest at 2 PM (already scheduled)
+1. ✅ **Run test:** `./test_engagement.sh`
+2. ✅ **Review output:** Check digest format, opportunities
+3. ✅ **Adjust if needed:** Scoring, volume, prompts
+4. ✅ **Go live:** Daily digest at 2 PM (running since Feb 20)
 5. **Engage with 1:** Test the workflow this week
-6. **Weekly review:** Monday mornings, check stats
+6. **Weekly review:** Check stats via dashboard or `venv/bin/python engagement.py`
 
 ---
 

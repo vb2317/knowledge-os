@@ -26,9 +26,19 @@ cat 2026-02-20.md
 grep -r "AI agent" .
 ```
 
-**Count engagements over time:**
+**Count digests with engagement section:**
 ```bash
-grep -c "🎯 \*Engagement Opportunities\*" *.md
+grep -l "🎯" *.md | wc -l
+```
+
+**Sync read items after marking [x] checkboxes:**
+```bash
+venv/bin/python sync_reading_log.py knos-digest/YYYY-MM-DD.md
+```
+
+**Browse all stories/authors/config in the dashboard:**
+```bash
+venv/bin/python -m streamlit run dashboard.py
 ```
 
 ## Archive Stats
@@ -37,8 +47,8 @@ grep -c "🎯 \*Engagement Opportunities\*" *.md
 # Total digests
 ls -1 *.md | wc -l
 
-# Digests with engagement section
-grep -l "🎯" *.md | wc -l
+# Digests with Substack items
+grep -l "📰" *.md | wc -l
 ```
 
 ---

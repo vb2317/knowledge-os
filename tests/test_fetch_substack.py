@@ -45,6 +45,8 @@ class TestFetchFeed:
         assert stories[0]["source"] == "substack"
         assert stories[0]["score"] == 0
         assert stories[0]["descendants"] == 0
+        assert "published_at" in stories[0]
+        assert stories[0]["published_at"]  # non-empty
 
     @patch("fetch_substack.feedparser")
     def test_max_items_respected(self, mock_fp):

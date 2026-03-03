@@ -16,6 +16,9 @@ venv/bin/python sync_reading_log.py knos-digest/YYYY-MM-DD.md
 
 # Run engagement summary
 venv/bin/python engagement_summary.py
+
+# Run local dashboard
+venv/bin/python -m streamlit run dashboard.py
 ```
 
 ## Environment
@@ -41,6 +44,7 @@ fetch_substack.py ─┘        ↓
 - `fetch_substack.py` — RSS fetcher for Substack feeds (config-driven, `feedparser` library)
 - `storage_interface.py` — abstract base; `storage_sqlite.py` implements it
 - `match_topics.py` — sentence-transformers semantic matching (heavy import, avoid in tests)
+- `dashboard.py` — local Streamlit app (6 tabs: Overview, Browse, Config, Stories, Authors, Simulator); reads DB and config directly, never writes to DB
 
 ## Code Conventions
 
@@ -49,6 +53,8 @@ fetch_substack.py ─┘        ↓
 - DB access in `engagement.py`: uses raw `sqlite3` directly (separate schema)
 - Errors/warnings: `print(..., file=sys.stderr)` — stdout is reserved for pipeline output
 - Archive naming: `archive/YYYY-MM-DD_{stories,digest}.{json,txt}`, digest markdown in `knos-digest/YYYY-MM-DD.md`
+- `published_at` (ISO 8601 string) is mandatory on every story dict from every source; `insert_item` accepts it and re-surfaces the story if the value is newer than what's stored
+- `max_age_days` (config `settings.max_age_days`, default 7) — stories older than this are dropped in `_filter_by_age()` before topic matching; importable and testable
 - HN username `vb7132` is hardcoded in `engagement.py` and `engagement_summary.py`
 
 ## Testing

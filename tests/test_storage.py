@@ -33,14 +33,16 @@ class TestUsers:
 
 class TestItems:
     def test_insert_and_get(self, storage):
-        item_id = storage.insert_item(
+        item_id, is_new = storage.insert_item(
             url="https://example.com/1",
             title="Test Story",
             source="hackernews",
             author="pg",
             score=100,
             fetched_at="2026-01-01T00:00:00",
+            published_at="2026-01-01T12:00:00",
         )
+        assert is_new is True
         item = storage.get_item(item_id)
         assert item is not None
         assert item["title"] == "Test Story"
@@ -49,7 +51,7 @@ class TestItems:
     def test_get_by_url(self, storage):
         url = "https://example.com/unique"
         storage.insert_item(url=url, title="T", source="hn", author="a",
-                           score=1, fetched_at="2026-01-01")
+                           score=1, fetched_at="2026-01-01", published_at="2026-01-01T12:00:00")
         item = storage.get_item_by_url(url)
         assert item is not None
         assert item["url"] == url
@@ -61,11 +63,39 @@ class TestItems:
         assert storage.get_item_by_url("https://nope.com") is None
 
     def test_duplicate_url_returns_existing_id(self, storage):
-        id1 = storage.insert_item(url="https://dup.com", title="A", source="hn",
-                                  author="a", score=1, fetched_at="2026-01-01")
-        id2 = storage.insert_item(url="https://dup.com", title="B", source="hn",
-                                  author="b", score=2, fetched_at="2026-01-02")
+        id1, is_new1 = storage.insert_item(url="https://dup.com", title="A", source="hn",
+                                           author="a", score=1, fetched_at="2026-01-01",
+                                           published_at="2026-01-01T12:00:00")
+        id2, is_new2 = storage.insert_item(url="https://dup.com", title="B", source="hn",
+                                           author="b", score=2, fetched_at="2026-01-02",
+                                           published_at="2026-01-01T12:00:00")
+        assert is_new1 is True
+        assert is_new2 is False
         assert id1 == id2
+
+    def test_is_new_flag(self, storage):
+        _, is_new1 = storage.insert_item(url="https://new.com", title="N", source="hn",
+                                         author="a", score=1, fetched_at="2026-01-01",
+                                         published_at="2026-01-01T12:00:00")
+        _, is_new2 = storage.insert_item(url="https://new.com", title="N", source="hn",
+                                         author="a", score=1, fetched_at="2026-01-01",
+                                         published_at="2026-01-01T12:00:00")
+        assert is_new1 is True
+        assert is_new2 is False
+
+    def test_republish_resurfaces(self, storage):
+        _, is_new1 = storage.insert_item(url="https://up.com", title="V1", source="hn",
+                                         author="a", score=1, fetched_at="2026-01-01",
+                                         published_at="2026-01-01T00:00:00")
+        _, is_new2 = storage.insert_item(url="https://up.com", title="V2", source="hn",
+                                         author="a", score=1, fetched_at="2026-01-02",
+                                         published_at="2026-01-02T00:00:00")
+        _, is_new3 = storage.insert_item(url="https://up.com", title="V2", source="hn",
+                                         author="a", score=1, fetched_at="2026-01-03",
+                                         published_at="2026-01-02T00:00:00")
+        assert is_new1 is True   # first insert
+        assert is_new2 is True   # newer published_at → re-surface
+        assert is_new3 is False  # same published_at → skip
 
 
 class TestTopics:
@@ -94,9 +124,10 @@ class TestTopics:
 
 class TestFeedback:
     def test_insert_and_get(self, storage, user_id):
-        item_id = storage.insert_item(url="https://fb.com", title="FB",
-                                      source="hn", author="a", score=1,
-                                      fetched_at="2026-01-01")
+        item_id, _ = storage.insert_item(url="https://fb.com", title="FB",
+                                         source="hn", author="a", score=1,
+                                         fetched_at="2026-01-01",
+                                         published_at="2026-01-01T12:00:00")
         storage.insert_feedback(user_id, item_id, "read",
                                metadata={"note": "interesting"})
         fb = storage.get_feedback(user_id, item_id)
@@ -105,9 +136,10 @@ class TestFeedback:
         assert fb[0]["metadata"]["note"] == "interesting"
 
     def test_multiple_feedback(self, storage, user_id):
-        item_id = storage.insert_item(url="https://multi.com", title="M",
-                                      source="hn", author="a", score=1,
-                                      fetched_at="2026-01-01")
+        item_id, _ = storage.insert_item(url="https://multi.com", title="M",
+                                         source="hn", author="a", score=1,
+                                         fetched_at="2026-01-01",
+                                         published_at="2026-01-01T12:00:00")
         storage.insert_feedback(user_id, item_id, "delivered")
         storage.insert_feedback(user_id, item_id, "read")
         fb = storage.get_feedback(user_id, item_id)
@@ -115,9 +147,10 @@ class TestFeedback:
 
     def test_get_all_user_feedback(self, storage, user_id):
         for i in range(3):
-            iid = storage.insert_item(url=f"https://all{i}.com", title=f"T{i}",
-                                      source="hn", author="a", score=1,
-                                      fetched_at="2026-01-01")
+            iid, _ = storage.insert_item(url=f"https://all{i}.com", title=f"T{i}",
+                                         source="hn", author="a", score=1,
+                                         fetched_at="2026-01-01",
+                                         published_at="2026-01-01T12:00:00")
             storage.insert_feedback(user_id, iid, "delivered")
         fb = storage.get_feedback(user_id)
         assert len(fb) == 3

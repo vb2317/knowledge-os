@@ -34,6 +34,15 @@ def fetch_feed(feed_url: str, max_items: int = 10) -> List[Dict]:
         else:
             ts = 0
 
+        fetched_at = datetime.now().isoformat()
+        updated = entry.get("updated_parsed")
+        date_tuple = updated or published  # prefer updated (captures edits)
+        if date_tuple:
+            published_at = datetime(*date_tuple[:6]).isoformat()
+        else:
+            published_at = fetched_at
+            print(f"Warning: no date for {url}", file=sys.stderr)
+
         stories.append({
             "id": _stable_id(url),
             "title": entry.get("title", ""),
@@ -44,7 +53,8 @@ def fetch_feed(feed_url: str, max_items: int = 10) -> List[Dict]:
             "descendants": 0,
             "text": entry.get("summary", ""),
             "source": "substack",
-            "fetched_at": datetime.now().isoformat(),
+            "fetched_at": fetched_at,
+            "published_at": published_at,
         })
 
     return stories

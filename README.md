@@ -45,7 +45,7 @@ Curates stories from Hacker News and Substack RSS feeds, matches them to your in
 # Run full digest pipeline
 bash run_digest_v2.sh
 
-# Run tests (82 tests)
+# Run tests (95 tests)
 venv/bin/python -m pytest tests/ -v
 
 # Sync read items from a digest file
@@ -67,7 +67,7 @@ venv/bin/python -m streamlit run dashboard.py
 | Hacker News | `fetch_stories.py` (API) | `sources.hackernews` | (none) |
 | Substack | `fetch_substack.py` (RSS) | `sources.substack.feeds` | 📰 |
 
-Stories from all sources share a uniform schema (`id`, `title`, `url`, `score`, `by`, `time`, `descendants`, `text`, `source`) and go through the same semantic matching pipeline.
+Stories from all sources share a uniform schema (`id`, `title`, `url`, `score`, `by`, `time`, `descendants`, `text`, `source`, `published_at`) and go through the same semantic matching pipeline.
 
 ---
 
@@ -128,6 +128,7 @@ _Keep building. The frontier moves forward._
 ### Storage (`storage_sqlite.py`)
 - SQLite via abstract `StorageInterface` (swappable to Postgres)
 - Tables: `users`, `topics`, `items`, `item_topic_scores`, `authors`, `digests`, `feedback`, `engagement_opportunities`, `user_comments`, `engagement_stats`
+- `items.published_at` (ISO 8601) tracks original publication date; on re-fetch, if `published_at` is newer than stored, the item re-surfaces in the digest
 
 ### Read Tracking (`sync_reading_log.py`)
 - Parses checked `[x]` items from digest markdown files
@@ -148,8 +149,9 @@ Local Streamlit app for visibility into pipeline state, config management, and a
 venv/bin/python -m streamlit run dashboard.py
 ```
 
-Five tabs:
+Six tabs:
 - **Overview** — item counts by source, digest history, items-by-topic bar chart, engagement stats
+- **Browse** — browse all stored stories by publication date with topic, source, and date-range filters; card layout with direct links
 - **Config** — edit topics (keywords, weights), sources (feeds, toggles), and pipeline settings; writes directly to `config.json`
 - **Stories** — filter items by source, date, score, topic, and author; expandable topic scores per row
 - **Authors** — sortable author table with topic affinity tags
@@ -180,6 +182,7 @@ Five tabs:
   "settings": {
     "max_stories": 30,
     "min_score": 50,
+    "max_age_days": 7,
     "similarity_threshold": 0.3,
     "notable_author_threshold": 3
   }
@@ -215,7 +218,7 @@ knowledge-os/
 │   ├── engagement_summary.py    # Morning summary generator
 │   └── send_engagement_summary.sh
 │
-├── Tests (82 tests)
+├── Tests (95 tests)
 │   ├── tests/test_process_digest.py
 │   ├── tests/test_storage.py
 │   ├── tests/test_engagement.py
@@ -257,11 +260,18 @@ knowledge-os/
 - **SQLite 3** for storage
 - **HN Firebase API** for story fetching
 - **OpenClaw** for WhatsApp delivery
-- **pytest** for testing (82 tests, `tmp_path` fixtures)
+- **pytest** for testing (95 tests, `tmp_path` fixtures)
 
 ---
 
 ## Recent Updates
+
+**2026-03-03:** published_at tracking, 52 Substack feeds, Browse tab, age filter
+- All stories now carry `published_at` (ISO 8601); HN from `time` field, Substack from `updated_parsed` or `published_parsed`
+- `storage_sqlite.py`: if a re-fetched URL has a newer `published_at`, record is updated and story re-surfaces in the digest
+- `max_age_days` config setting (default 7) filters stories before matching — prevents old Substack backlog from flooding the digest
+- 52 Substack feeds added from TSPC community CSV
+- Dashboard **Browse** tab: card-based reading view, filter by topic/source/date range, grouped by publication date
 
 **2026-02-27:** Multi-source support, inline read tracking, integration tests
 - Substack RSS fetcher with config-driven feeds and 📰 source indicator

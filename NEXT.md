@@ -8,13 +8,17 @@
 - [x] **Test full pipeline** — COMPLETE (integration test in tests/test_pipeline_integration.py)
 - [x] **Monitor delivery reliability** - Track 7 days of successful 2 PM deliveries
 - [ ] **Review match quality** - Are the semantic matches hitting the right content?
-- [ ] **Weekly trending topics analysis** For this drive page, track the substacks and summarize https://docs.google.com/spreadsheets/d/18nQixal03lXHCv99lzQj2zLtW8FGFBoV4wqrqE2_yrY/edit?gid=0#gid=0
+- [ ] **Add frequency in config option for sources** - track all sources and store the data every day but have an option to track: certain days of the week, weekly, bi-weekly, monthly, quarterly. 
+- [x] **Weekly trending topics analysis** For this page, add them to the sources: substack_tspc.csv — COMPLETE (52 Substack feeds from tspc CSV added to config; YouTube/Instagram/Spotify/LinkedIn/profile-only URLs skipped)
 - [x] **Track read content** — COMPLETE (sync_reading_log.py + Read Tracker section in digest)
 - [x] **Show yc link** — COMPLETE (HN discussion links + 💬 comment keyword summaries)
 - [x] **Add unit tests** — COMPLETE (4 test files in tests/ covering process_digest, storage, engagement, sync_reading_log)
 - [x] **Add other sources** — COMPLETE (Substack RSS via fetch_substack.py, config-driven feeds)
+- [x] **Fix Substack duplicate stories** — COMPLETE (insert_item returns (item_id, is_new); digest only surfaces new stories; author/topic tracking still runs for all fetched content)
 - [ ] **Run tests in PR builds** - Unit and integration tests should be run as part of PR builder
-- [x] **build a dashboard** — COMPLETE (2026-03-01: Streamlit app, 5 tabs: Overview, Config, Stories, Authors, Simulator; `streamlit run dashboard.py`)
+- [x] **build a dashboard** — COMPLETE (2026-03-01: Streamlit app; 2026-03-03: 6 tabs now — added Browse tab for card-based reading by topic/source/date; `streamlit run dashboard.py`)
+- [ ] **Add economist as a source** - New POC: something with images, something that requires login. 
+- [ ] **Interesting content** Send very high match HN updates on the weekend, rather send more of some interesting reads that are generic, from HN and outside. Chill feels. Make this kind of thing very configurable through the dashboard config. It should be super friendly UX.
 
 ## Short-term (This Month)
 
@@ -36,6 +40,8 @@
 - [ ] **Error handling** - Graceful degradation if HN API is down
 
 ## Mid-term (3-6 Months)
+
+- [ ] Being able to search through a book that I have read before - but with a question - potential use of SLMs?
 
 ### Intelligence Layer
 - [ ] **Comment analysis expansion** - Surface high-signal HN comments, not just stories

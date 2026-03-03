@@ -21,6 +21,7 @@ def config(tmp_path):
         "settings": {
             "max_stories": 30,
             "min_score": 50,
+            "max_age_days": 7,
             "similarity_threshold": 0.3,
             "digest_time": "14:00",
             "track_authors": True,
@@ -44,6 +45,7 @@ def sample_stories():
             "descendants": 80,
             "text": "",
             "fetched_at": now,
+            "published_at": now,
         },
         {
             "id": 1002,
@@ -55,6 +57,7 @@ def sample_stories():
             "descendants": 30,
             "text": "",
             "fetched_at": now,
+            "published_at": now,
         },
     ]
 
@@ -176,3 +179,31 @@ class TestPipelineIntegration:
 
             digest = generate_digest_text(result)
             assert "Quiet day" in digest
+
+    def test_age_filter_drops_old_stories(self, config):
+        """Stories older than max_age_days are excluded before matching."""
+        mock_matcher = MagicMock()
+        mock_matcher.match_stories.side_effect = _fake_match_stories
+
+        old_story = {
+            "id": 2001,
+            "title": "New Transformer Architecture from 2020",
+            "url": "https://example.com/old",
+            "score": 300,
+            "by": "oldposter",
+            "time": 1577836800,
+            "descendants": 0,
+            "text": "",
+            "fetched_at": datetime.now().isoformat(),
+            "published_at": "2020-01-01T00:00:00",
+        }
+
+        with patch("process_digest.TopicMatcher", return_value=mock_matcher), \
+             patch("process_digest.ENGAGEMENT_ENABLED", False):
+
+            from process_digest import process_stories
+
+            result = process_stories([old_story], config)
+            # Old story should be filtered before matching — matcher never called
+            mock_matcher.match_stories.assert_called_once_with([])
+            assert result["stories"] == []

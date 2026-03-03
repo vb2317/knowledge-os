@@ -97,24 +97,60 @@ def summarize_comments(comments: List[Dict], descendants: int = 0) -> str:
     return f"{descendants or len(comments)} comments"
 
 
+def _filter_by_age(stories: List[Dict], max_age_days: int) -> List[Dict]:
+    """Return only stories whose published_at is within max_age_days of now.
+    Stories with missing or unparseable published_at are kept."""
+    from datetime import timedelta
+    cutoff = datetime.now() - timedelta(days=max_age_days)
+    result = []
+    for story in stories:
+        pub = story.get('published_at', '')
+        if not pub:
+            result.append(story)
+            continue
+        try:
+            if datetime.fromisoformat(pub) >= cutoff:
+                result.append(story)
+        except ValueError:
+            result.append(story)
+    return result
+
+
 def process_stories(stories: List[Dict], config: Dict) -> Dict:
     """Process stories through the new storage pipeline"""
+    import time
+
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Processing {len(stories)} stories...", file=sys.stderr)
+    start_time = time.time()
+
+    # Drop stories older than max_age_days
+    max_age_days = config['settings'].get('max_age_days', 7)
+    before = len(stories)
+    stories = _filter_by_age(stories, max_age_days)
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Age filter ({max_age_days}d): {before} → {len(stories)} stories", file=sys.stderr)
     
     # Initialize storage
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Initializing storage...", file=sys.stderr)
+    storage_start = time.time()
     storage_config = config['storage']
     storage = get_storage(
         backend=storage_config['backend'],
         **storage_config.get(storage_config['backend'], {})
     )
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Storage initialized in {time.time() - storage_start:.1f}s", file=sys.stderr)
     
     # Get or create user
+    user_start = time.time()
     user_id = storage.get_or_create_user(
         identifier=config['user']['identifier']
     )
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] User loaded in {time.time() - user_start:.1f}s", file=sys.stderr)
     
     # Initialize topics if needed
+    topics_start = time.time()
     existing_topics = storage.get_topics(user_id)
     if not existing_topics:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Creating topics...", file=sys.stderr)
         for topic in config['topics']:
             storage.insert_topic(
                 user_id=user_id,
@@ -123,30 +159,36 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
                 weight=topic.get('weight', 1.0)
             )
         existing_topics = storage.get_topics(user_id)
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Topics loaded in {time.time() - topics_start:.1f}s ({len(existing_topics)} topics)", file=sys.stderr)
     
     # Match topics using existing matcher
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Starting topic matching (embeddings)...", file=sys.stderr)
+    matcher_start = time.time()
     matcher = TopicMatcher(config_path="config.json")
     matched_stories = matcher.match_stories(stories)
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Topic matching completed in {time.time() - matcher_start:.1f}s ({len(matched_stories)} matched)", file=sys.stderr)
     
     # Process each story
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Storing {len(matched_stories)} stories in database...", file=sys.stderr)
+    db_start = time.time()
     item_ids = []
+    new_stories = []
     notable_authors = []
     continuing_threads = []
-    
+
     for story in matched_stories:
-        # Insert item
-        item_id = storage.insert_item(
+        # Insert item — is_new=False means already delivered in a prior digest
+        item_id, is_new = storage.insert_item(
             url=story['url'],
             title=story['title'],
             source=story.get('source', 'hackernews'),
             author=story['by'],
             score=story['score'],
-            fetched_at=story['fetched_at']
+            fetched_at=story['fetched_at'],
+            published_at=story.get('published_at', ''),
         )
-        
-        item_ids.append(item_id)
-        
-        # Store topic scores
+
+        # Store topic scores and author stats for all stories (tracking still applies)
         for topic in existing_topics:
             if topic['name'] in story['all_topic_scores']:
                 score = story['all_topic_scores'][topic['name']]
@@ -155,15 +197,23 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
                     topic_id=topic['topic_id'],
                     score=score
                 )
-        
-        # Update author stats
+
         storage.upsert_author(
             author_name=story['by'],
             item_id=item_id,
             topic_scores=story['all_topic_scores']
         )
+
+        # Only surface new stories in the digest
+        if is_new:
+            item_ids.append(item_id)
+            new_stories.append(story)
+
+    matched_stories = new_stories
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Database storage completed in {time.time() - db_start:.1f}s ({len(matched_stories)} new)", file=sys.stderr)
     
     # Get notable authors
+    authors_start = time.time()
     notable_authors = storage.get_notable_authors(
         user_id=user_id,
         min_count=config['settings']['notable_author_threshold']
@@ -172,8 +222,10 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
     # Filter notable authors that appear in current batch
     current_authors = {s['by'] for s in matched_stories}
     batch_notable = [a for a in notable_authors if a['author_name'] in current_authors]
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Notable authors identified in {time.time() - authors_start:.1f}s ({len(batch_notable)} in batch)", file=sys.stderr)
     
     # Record digest
+    digest_start = time.time()
     digest_id = storage.insert_digest(
         user_id=user_id,
         item_ids=item_ids,
@@ -188,9 +240,12 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
             action='delivered',
             metadata={'digest_id': digest_id}
         )
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Digest recorded in {time.time() - digest_start:.1f}s", file=sys.stderr)
 
     # Fetch comment summaries for matched stories
     if ENGAGEMENT_ENABLED and matched_stories:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Fetching comment summaries...", file=sys.stderr)
+        comments_start = time.time()
         try:
             db_config = config['storage']['sqlite']
             comment_detector = EngagementDetector(db_config['db_path'])
@@ -203,12 +258,15 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
                     story['comment_summary'] = summarize_comments(comments, story.get('descendants', 0))
                 except Exception:
                     story['comment_summary'] = None
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Comment summaries fetched in {time.time() - comments_start:.1f}s", file=sys.stderr)
         except Exception as e:
-            print(f"Warning: Comment summarization failed: {e}", file=sys.stderr)
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Warning: Comment summarization failed: {e}", file=sys.stderr)
 
     # Detect engagement opportunities
     engagement_opportunities = []
     if ENGAGEMENT_ENABLED and matched_stories:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Detecting engagement opportunities...", file=sys.stderr)
+        engagement_start = time.time()
         try:
             # Get raw stories with HN data for engagement detection
             db_config = config['storage']['sqlite']
@@ -217,9 +275,15 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
             detector.save_opportunities(engagement_opportunities, datetime.now().date().isoformat())
             
             # Sync user comments in background
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Syncing user comments...", file=sys.stderr)
+            sync_start = time.time()
             detector.sync_user_comments()
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] User comments synced in {time.time() - sync_start:.1f}s", file=sys.stderr)
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Engagement detection completed in {time.time() - engagement_start:.1f}s", file=sys.stderr)
         except Exception as e:
-            print(f"Warning: Engagement detection failed: {e}", file=sys.stderr)
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Warning: Engagement detection failed: {e}", file=sys.stderr)
+    
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Total processing time: {time.time() - start_time:.1f}s", file=sys.stderr)
     
     return {
         'stories': matched_stories,

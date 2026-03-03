@@ -4,7 +4,7 @@ SQLite implementation of storage interface
 """
 import sqlite3
 import json
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 from storage_interface import StorageInterface
 
@@ -44,6 +44,7 @@ class SQLiteStorage(StorageInterface):
                 author TEXT,
                 score INTEGER,
                 fetched_at TEXT NOT NULL,
+                published_at TEXT NOT NULL DEFAULT '',
                 embedding_id TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(url)
@@ -122,31 +123,51 @@ class SQLiteStorage(StorageInterface):
         c.execute('CREATE INDEX IF NOT EXISTS idx_items_author ON items(author)')
         c.execute('CREATE INDEX IF NOT EXISTS idx_feedback_user ON feedback(user_id)')
         c.execute('CREATE INDEX IF NOT EXISTS idx_digests_user ON digests(user_id)')
-        
+
+        # Migration: add published_at if missing (existing DBs)
+        try:
+            c.execute("ALTER TABLE items ADD COLUMN published_at TEXT NOT NULL DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
         conn.commit()
         conn.close()
     
     # Items
     def insert_item(self, url: str, title: str, source: str, author: str,
-                   score: int, fetched_at: str, embedding_id: Optional[str] = None) -> int:
+                   score: int, fetched_at: str, published_at: str = '',
+                   embedding_id: Optional[str] = None) -> Tuple[int, bool]:
         conn = self._get_conn()
         c = conn.cursor()
-        
+
         c.execute('''
-            INSERT OR IGNORE INTO items (url, title, source, author, score, fetched_at, embedding_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (url, title, source, author, score, fetched_at, embedding_id))
-        
+            INSERT OR IGNORE INTO items
+            (url, title, source, author, score, fetched_at, published_at, embedding_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (url, title, source, author, score, fetched_at, published_at, embedding_id))
+
         if c.lastrowid:
             item_id = c.lastrowid
+            is_new = True
         else:
-            # Already exists, get the ID
-            c.execute('SELECT item_id FROM items WHERE url = ?', (url,))
-            item_id = c.fetchone()['item_id']
-        
+            c.execute('SELECT item_id, published_at FROM items WHERE url = ?', (url,))
+            row = c.fetchone()
+            item_id = row['item_id']
+            stored = row['published_at'] or ''
+
+            if published_at and published_at > stored:
+                # Article updated — refresh title/score, re-surface in digest
+                c.execute('''
+                    UPDATE items SET title=?, score=?, published_at=?, fetched_at=?
+                    WHERE item_id=?
+                ''', (title, score, published_at, fetched_at, item_id))
+                is_new = True
+            else:
+                is_new = False
+
         conn.commit()
         conn.close()
-        return item_id
+        return item_id, is_new
     
     def get_item(self, item_id: int) -> Optional[Dict]:
         conn = self._get_conn()

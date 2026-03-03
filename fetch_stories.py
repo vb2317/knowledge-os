@@ -58,7 +58,8 @@ def fetch_top_stories(max_stories: int = 30, min_score: int = 50) -> List[Dict]:
                     'time': story.get('time', 0),
                     'descendants': story.get('descendants', 0),  # comment count
                     'text': story.get('text', ''),
-                    'fetched_at': datetime.now().isoformat()
+                    'fetched_at': datetime.now().isoformat(),
+                    'published_at': datetime.utcfromtimestamp(story['time']).isoformat() if story.get('time') else datetime.now().isoformat(),
                 })
     
     # Sort by score

@@ -4,7 +4,7 @@ Storage interface abstraction for HN digest system
 Supports SQLite (current) and Postgres (future)
 """
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 import json
 
@@ -18,9 +18,11 @@ class StorageInterface(ABC):
     
     # Items
     @abstractmethod
-    def insert_item(self, url: str, title: str, source: str, author: str, 
-                   score: int, fetched_at: str, embedding_id: Optional[str] = None) -> int:
-        """Insert item and return item_id"""
+    def insert_item(self, url: str, title: str, source: str, author: str,
+                   score: int, fetched_at: str, published_at: str = '',
+                   embedding_id: Optional[str] = None) -> Tuple[int, bool]:
+        """Insert item and return (item_id, is_new).
+        is_new=True if newly inserted OR if published_at is newer than stored."""
         pass
     
     @abstractmethod

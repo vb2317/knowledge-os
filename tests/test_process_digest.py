@@ -1,8 +1,10 @@
 """Tests for process_digest.py pure functions"""
 import pytest
+from datetime import datetime, timedelta
 from process_digest import (
     _extract_first_sentence,
     _extract_keywords,
+    _filter_by_age,
     summarize_comments,
     generate_digest_text,
 )
@@ -78,6 +80,51 @@ class TestExtractKeywords:
         sentences = ["python python python", "python rust rust", "rust golang"]
         result = _extract_keywords(sentences, set())
         assert result[0] == "python"
+
+
+# --- _filter_by_age ---
+
+class TestFilterByAge:
+    def _story(self, published_at):
+        return {"title": "T", "published_at": published_at}
+
+    def test_recent_story_passes(self):
+        s = self._story(datetime.now().isoformat())
+        assert _filter_by_age([s], 7) == [s]
+
+    def test_old_story_filtered(self):
+        s = self._story("2020-01-01T00:00:00")
+        assert _filter_by_age([s], 7) == []
+
+    def test_no_published_at_passes(self):
+        s = {"title": "no date"}
+        assert _filter_by_age([s], 7) == [s]
+
+    def test_empty_published_at_passes(self):
+        s = self._story("")
+        assert _filter_by_age([s], 7) == [s]
+
+    def test_invalid_date_passes(self):
+        s = self._story("not-a-date")
+        assert _filter_by_age([s], 7) == [s]
+
+    def test_within_boundary_passes(self):
+        s = self._story((datetime.now() - timedelta(days=6)).isoformat())
+        assert _filter_by_age([s], 7) == [s]
+
+    def test_outside_boundary_filtered(self):
+        s = self._story((datetime.now() - timedelta(days=8)).isoformat())
+        assert _filter_by_age([s], 7) == []
+
+    def test_mixed_keeps_only_recent(self):
+        recent = self._story(datetime.now().isoformat())
+        old = self._story("2020-01-01T00:00:00")
+        no_date = {"title": "no date"}
+        result = _filter_by_age([recent, old, no_date], 7)
+        assert result == [recent, no_date]
+
+    def test_empty_list(self):
+        assert _filter_by_age([], 7) == []
 
 
 # --- summarize_comments ---

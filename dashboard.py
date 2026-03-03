@@ -63,7 +63,7 @@ def scalar(sql, params=()):
 # ── App shell ────────────────────────────────────────────────────────────────
 
 st.title("🦅 knowledge-os")
-tabs = st.tabs(["Overview", "Config", "Stories", "Authors", "Simulator"])
+tabs = st.tabs(["Overview", "Browse", "Config", "Stories", "Authors", "Simulator"])
 
 
 # ── Tab 1: Overview ──────────────────────────────────────────────────────────
@@ -130,9 +130,107 @@ with tabs[0]:
         st.dataframe(pd.DataFrame(digests), use_container_width=True, hide_index=True)
 
 
-# ── Tab 2: Config ────────────────────────────────────────────────────────────
+# ── Tab 2: Browse ────────────────────────────────────────────────────────────
 
 with tabs[1]:
+    st.header("Browse")
+
+    cfg_browse = load_config()
+    topic_names = [t["name"] for t in cfg_browse["topics"]]
+
+    b1, b2, b3 = st.columns([2, 1, 1])
+    browse_topic = b1.selectbox("Topic", ["All"] + topic_names, key="browse_topic")
+    browse_days = b2.number_input("Days back", min_value=1, max_value=90, value=15, key="browse_days")
+    browse_source = b3.selectbox("Source", ["All", "hackernews", "substack"], key="browse_source")
+
+    cutoff_browse = (datetime.now() - timedelta(days=int(browse_days))).isoformat()
+
+    if browse_topic == "All":
+        browse_sql = """
+            SELECT DISTINCT i.item_id, i.title, i.url, i.source, i.author,
+                   i.score, i.published_at,
+                   (
+                       SELECT t.name FROM item_topic_scores its2
+                       JOIN topics t ON its2.topic_id = t.topic_id
+                       WHERE its2.item_id = i.item_id
+                       ORDER BY its2.score DESC LIMIT 1
+                   ) AS top_topic,
+                   (
+                       SELECT MAX(its3.score) FROM item_topic_scores its3
+                       WHERE its3.item_id = i.item_id
+                   ) AS top_score
+            FROM items i
+            WHERE i.published_at != ''
+              AND i.published_at >= ?
+            {source_clause}
+            ORDER BY i.published_at DESC
+            LIMIT 200
+        """
+    else:
+        browse_sql = """
+            SELECT i.item_id, i.title, i.url, i.source, i.author,
+                   i.score, i.published_at,
+                   t.name AS top_topic,
+                   its.score AS top_score
+            FROM items i
+            JOIN item_topic_scores its ON i.item_id = its.item_id
+            JOIN topics t ON its.topic_id = t.topic_id
+            WHERE t.name = ?
+              AND i.published_at != ''
+              AND i.published_at >= ?
+            {source_clause}
+            ORDER BY i.published_at DESC
+            LIMIT 200
+        """
+
+    source_clause = "AND i.source = ?" if browse_source != "All" else ""
+    browse_sql = browse_sql.format(source_clause=source_clause)
+
+    if browse_topic == "All":
+        browse_params = [cutoff_browse]
+    else:
+        browse_params = [browse_topic, cutoff_browse]
+
+    if browse_source != "All":
+        browse_params.append(browse_source)
+
+    browse_rows = query(browse_sql, browse_params)
+
+    st.caption(f"{len(browse_rows)} stories")
+
+    if not browse_rows:
+        st.info("No stories found for this selection. Try a wider date range or different topic.")
+    else:
+        # Group by publication date
+        by_date = {}
+        for row in browse_rows:
+            day = row["published_at"][:10]
+            by_date.setdefault(day, []).append(row)
+
+        for day, day_rows in by_date.items():
+            st.markdown(f"### {day}")
+            for row in day_rows:
+                source = row["source"]
+                source_badge = "📰 Substack" if source == "substack" else "🔶 HN"
+                score_str = f"↑{row['score']}" if row["score"] else ""
+                topic_str = f"· {row['top_topic']}" if row.get("top_topic") else ""
+                topic_sim = f"({row['top_score']:.2f})" if row.get("top_score") else ""
+
+                with st.container(border=True):
+                    title_col, meta_col = st.columns([5, 1])
+                    with title_col:
+                        st.markdown(f"**[{row['title']}]({row['url']})**")
+                        st.caption(
+                            f"{source_badge} · {row['author']} {score_str} {topic_str} {topic_sim}"
+                        )
+                    with meta_col:
+                        st.link_button("Open →", row["url"])
+            st.divider()
+
+
+# ── Tab 3: Config ────────────────────────────────────────────────────────────
+
+with tabs[2]:
     st.header("Config")
     cfg = load_config()
 
@@ -248,9 +346,9 @@ with tabs[1]:
     st.caption(f"Config file: `{CONFIG_PATH}`")
 
 
-# ── Tab 3: Stories ───────────────────────────────────────────────────────────
+# ── Tab 4: Stories ───────────────────────────────────────────────────────────
 
-with tabs[2]:
+with tabs[3]:
     st.header("Stories")
 
     # Sidebar-style filters in a top row
@@ -337,9 +435,9 @@ with tabs[2]:
                 st.bar_chart(ts_df.set_index("name")["score"])
 
 
-# ── Tab 4: Authors ───────────────────────────────────────────────────────────
+# ── Tab 5: Authors ───────────────────────────────────────────────────────────
 
-with tabs[3]:
+with tabs[4]:
     st.header("Authors")
 
     a1, a2 = st.columns(2)
@@ -374,9 +472,9 @@ with tabs[3]:
         st.info("No authors found yet.")
 
 
-# ── Tab 5: Simulator ─────────────────────────────────────────────────────────
+# ── Tab 6: Simulator ─────────────────────────────────────────────────────────
 
-with tabs[4]:
+with tabs[5]:
     st.header("Simulator")
     st.caption("Preview how a URL or text would match topics and appear in a digest.")
 

@@ -97,6 +97,30 @@ def summarize_comments(comments: List[Dict], descendants: int = 0) -> str:
     return f"{descendants or len(comments)} comments"
 
 
+_WEEKDAY_NAMES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+
+def _source_is_due(frequency, today: datetime = None) -> bool:
+    """Return True if this source should surface in today's digest."""
+    if today is None:
+        today = datetime.now()
+    if not frequency or frequency == "daily":
+        return True
+    if isinstance(frequency, list):
+        day_name = _WEEKDAY_NAMES[today.weekday()]
+        return day_name in [d.lower()[:3] for d in frequency]
+    freq = frequency.lower()
+    if freq == "weekly":
+        return today.weekday() == 0  # Monday
+    if freq == "biweekly":
+        return today.weekday() == 0 and today.isocalendar()[1] % 2 == 0
+    if freq == "monthly":
+        return today.day == 1
+    if freq == "quarterly":
+        return today.day == 1 and today.month in (1, 4, 7, 10)
+    return True  # unknown frequency → always include
+
+
 def _filter_by_age(stories: List[Dict], max_age_days: int) -> List[Dict]:
     """Return only stories whose published_at is within max_age_days of now.
     Stories with missing or unparseable published_at are kept."""
@@ -128,7 +152,18 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
     before = len(stories)
     stories = _filter_by_age(stories, max_age_days)
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Age filter ({max_age_days}d): {before} → {len(stories)} stories", file=sys.stderr)
-    
+
+    # Filter stories by source frequency
+    sources_cfg = config.get('sources', {})
+    before = len(stories)
+    stories = [
+        s for s in stories
+        if _source_is_due(
+            sources_cfg.get(s.get('source', 'hackernews'), {}).get('frequency', 'daily')
+        )
+    ]
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Frequency filter: {before} → {len(stories)} stories", file=sys.stderr)
+
     # Initialize storage
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Initializing storage...", file=sys.stderr)
     storage_start = time.time()

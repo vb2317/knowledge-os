@@ -161,12 +161,17 @@ Six tabs:
 
 ## Configuration (`config.json`)
 
+The `frequency` field on each source controls which days its stories surface in the digest. All sources are still fetched and stored daily for tracking — frequency only affects digest inclusion.
+
+Valid values: `"daily"` (default), `"weekly"` (Mondays), `"biweekly"` (Mondays of even ISO weeks), `"monthly"` (1st of month), `"quarterly"` (Jan/Apr/Jul/Oct 1st), or a list like `["mon", "wed", "fri"]`.
+
 ```json
 {
   "sources": {
-    "hackernews": { "enabled": true },
+    "hackernews": { "enabled": true, "frequency": "daily" },
     "substack": {
       "enabled": true,
+      "frequency": "weekly",
       "feeds": ["https://derekthompson.substack.com/feed"],
       "max_items": 10
     }

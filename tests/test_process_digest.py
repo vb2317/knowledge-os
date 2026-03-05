@@ -5,6 +5,7 @@ from process_digest import (
     _extract_first_sentence,
     _extract_keywords,
     _filter_by_age,
+    _source_is_due,
     summarize_comments,
     generate_digest_text,
 )
@@ -125,6 +126,85 @@ class TestFilterByAge:
 
     def test_empty_list(self):
         assert _filter_by_age([], 7) == []
+
+
+# --- _source_is_due ---
+
+class TestSourceIsDue:
+    def _monday_even(self):
+        # A Monday with an even ISO week number
+        # ISO week 2 of 2023 starts Mon Jan 9 2023
+        return datetime(2023, 1, 9)  # weekday=0, isoweek=2
+
+    def _monday_odd(self):
+        # ISO week 1 of 2023: Mon Jan 2 2023
+        return datetime(2023, 1, 2)  # weekday=0, isoweek=1
+
+    def _tuesday(self):
+        return datetime(2023, 1, 10)  # Tuesday
+
+    def test_daily_always_true(self):
+        assert _source_is_due("daily", datetime(2023, 6, 15)) is True
+
+    def test_none_always_true(self):
+        assert _source_is_due(None, datetime(2023, 6, 15)) is True
+
+    def test_empty_string_always_true(self):
+        assert _source_is_due("", datetime(2023, 6, 15)) is True
+
+    def test_weekly_true_on_monday(self):
+        assert _source_is_due("weekly", self._monday_even()) is True
+
+    def test_weekly_false_on_tuesday(self):
+        assert _source_is_due("weekly", self._tuesday()) is False
+
+    def test_biweekly_true_monday_even_week(self):
+        assert _source_is_due("biweekly", self._monday_even()) is True
+
+    def test_biweekly_false_monday_odd_week(self):
+        assert _source_is_due("biweekly", self._monday_odd()) is False
+
+    def test_biweekly_false_non_monday(self):
+        assert _source_is_due("biweekly", self._tuesday()) is False
+
+    def test_monthly_true_on_first(self):
+        assert _source_is_due("monthly", datetime(2023, 3, 1)) is True
+
+    def test_monthly_false_on_second(self):
+        assert _source_is_due("monthly", datetime(2023, 3, 2)) is False
+
+    def test_quarterly_true_jan_1(self):
+        assert _source_is_due("quarterly", datetime(2023, 1, 1)) is True
+
+    def test_quarterly_true_apr_1(self):
+        assert _source_is_due("quarterly", datetime(2023, 4, 1)) is True
+
+    def test_quarterly_true_jul_1(self):
+        assert _source_is_due("quarterly", datetime(2023, 7, 1)) is True
+
+    def test_quarterly_true_oct_1(self):
+        assert _source_is_due("quarterly", datetime(2023, 10, 1)) is True
+
+    def test_quarterly_false_jan_2(self):
+        assert _source_is_due("quarterly", datetime(2023, 1, 2)) is False
+
+    def test_quarterly_false_feb_1(self):
+        assert _source_is_due("quarterly", datetime(2023, 2, 1)) is False
+
+    def test_list_true_on_matching_day(self):
+        monday = datetime(2023, 1, 9)  # Monday
+        assert _source_is_due(["mon", "wed", "fri"], monday) is True
+
+    def test_list_false_on_non_matching_day(self):
+        tuesday = datetime(2023, 1, 10)  # Tuesday
+        assert _source_is_due(["mon", "wed", "fri"], tuesday) is False
+
+    def test_list_case_insensitive(self):
+        monday = datetime(2023, 1, 9)
+        assert _source_is_due(["Mon", "WED"], monday) is True
+
+    def test_unknown_frequency_defaults_true(self):
+        assert _source_is_due("fortnightly", datetime(2023, 6, 15)) is True
 
 
 # --- summarize_comments ---

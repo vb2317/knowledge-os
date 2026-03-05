@@ -8,7 +8,7 @@
 - [x] **Test full pipeline** — COMPLETE (integration test in tests/test_pipeline_integration.py)
 - [x] **Monitor delivery reliability** - Track 7 days of successful 2 PM deliveries
 - [ ] **Review match quality** - Are the semantic matches hitting the right content?
-- [ ] **Add frequency in config option for sources** - track all sources and store the data every day but have an option to track: certain days of the week, weekly, bi-weekly, monthly, quarterly. 
+- [x] **Add frequency in config option for sources** — COMPLETE (2026-03-05: `frequency` field per source in config; `_source_is_due()` filter in `process_digest.py`; supports daily/weekly/biweekly/monthly/quarterly/list-of-weekdays; all sources still fetched and stored daily)
 - [x] **Weekly trending topics analysis** For this page, add them to the sources: substack_tspc.csv — COMPLETE (52 Substack feeds from tspc CSV added to config; YouTube/Instagram/Spotify/LinkedIn/profile-only URLs skipped)
 - [x] **Track read content** — COMPLETE (sync_reading_log.py + Read Tracker section in digest)
 - [x] **Show yc link** — COMPLETE (HN discussion links + 💬 comment keyword summaries)
@@ -16,8 +16,10 @@
 - [x] **Add other sources** — COMPLETE (Substack RSS via fetch_substack.py, config-driven feeds)
 - [x] **Fix Substack duplicate stories** — COMPLETE (insert_item returns (item_id, is_new); digest only surfaces new stories; author/topic tracking still runs for all fetched content)
 - [ ] **Run tests in PR builds** - Unit and integration tests should be run as part of PR builder
-- [x] **build a dashboard** — COMPLETE (2026-03-01: Streamlit app; 2026-03-03: 6 tabs now — added Browse tab for card-based reading by topic/source/date; `streamlit run dashboard.py`)
-- [ ] **Add economist as a source** - New POC: something with images, something that requires login. 
+- [x] **build a dashboard** — COMPLETE (2026-03-01: Streamlit app; 2026-03-03: 6 tabs; 2026-03-04: split into PM/Engineering modes via sidebar switcher — PM view: Overview + match quality + Browse + Authors; Engg view: Pipeline Health + Stories + Config + Simulator)
+- [ ] **Add economist as a source** - New POC: something with images, something that requires login.
+- [ ] **Per-feed frequency for Substack** — currently all Substack feeds share one source-level `frequency`; allow per-feed overrides
+- [ ] **Dashboard Config tab: frequency editor** — expose `frequency` field per source in the Config tab UI
 - [ ] **Interesting content** Send very high match HN updates on the weekend, rather send more of some interesting reads that are generic, from HN and outside. Chill feels. Make this kind of thing very configurable through the dashboard config. It should be super friendly UX.
 
 ## Short-term (This Month)
@@ -27,6 +29,7 @@
 - [ ] **Refine topic embeddings** - Adjust if matches drift from intent
 - [ ] **Add topic weights** - Let VB prioritize AI/ML > Parenting > Philosophy, etc.
 - [ ] **Threshold tuning** - Current semantic similarity cutoff may need calibration
+- [ ] **Feedback mechanism** - via whatsapp
 - [ ] **Store feedback** - store the feedback as: opening links, links engaged with, linked stored in the memo db
 
 ### Features
@@ -38,6 +41,11 @@
 - [ ] **Logging & metrics** - Track story volume, match rates, delivery timing
 - [ ] **Backup & recovery** - SQLite backup strategy (daily? weekly?)
 - [ ] **Error handling** - Graceful degradation if HN API is down
+
+### Launch
+- [ ] onboarding flow: anyone can subscribe to a list of topics and or sources - max limit. 
+- [ ] Move the system to a cloud server
+- [ ] Number of configurable topics
 
 ## Mid-term (3-6 Months)
 

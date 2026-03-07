@@ -74,6 +74,13 @@ class EngagementDetector:
         except Exception:
             return None
     
+    def fetch_user_karma(self, username: str) -> Optional[int]:
+        """Fetch HN karma for a username."""
+        user_data = self.fetch_json(f"{HN_API}/user/{username}.json")
+        if user_data:
+            return user_data.get("karma")
+        return None
+
     def fetch_user_recent_comments(self, max_items: int = 30) -> List[Dict]:
         """Fetch user's recent comments from HN API"""
         user_data = self.fetch_json(f"{HN_API}/user/{HN_USERNAME}.json")

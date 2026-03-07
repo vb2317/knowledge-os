@@ -78,9 +78,29 @@ class TopicMatcher:
         
         # Sort by topic score (most relevant first)
         matched_stories.sort(key=lambda x: x['topic_score'], reverse=True)
-        
+
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Story matching completed in {time.time() - match_start:.1f}s ({len(matched_stories)}/{len(stories)} matched)", file=sys.stderr)
         return matched_stories
+
+    def score_all_stories(self, stories: List[Dict]) -> List:
+        """Return (story, max_similarity) for every story, with all_topic_scores attached.
+        Unlike match_stories(), no threshold filter is applied — all stories are returned."""
+        import sys
+        if not stories:
+            return []
+        story_texts = [s['title'] for s in stories]
+        story_embeddings = self.model.encode(story_texts)
+        result = []
+        for i, story in enumerate(stories):
+            story_emb = story_embeddings[i].reshape(1, -1)
+            topic_scores = {}
+            for topic_name, topic_emb in self.topic_embeddings.items():
+                similarity = cosine_similarity(story_emb, topic_emb.reshape(1, -1))[0][0]
+                topic_scores[topic_name] = float(similarity)
+            story['all_topic_scores'] = topic_scores
+            max_sim = max(topic_scores.values(), default=0.0)
+            result.append((story, max_sim))
+        return result
 
 if __name__ == "__main__":
     import sys

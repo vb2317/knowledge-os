@@ -11,6 +11,27 @@ from typing import List, Dict
 
 import feedparser
 
+_WEEKDAY_NAMES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+
+def _feed_is_due(frequency, today: datetime = None) -> bool:
+    """Return True if this feed should be fetched today based on its frequency."""
+    if today is None:
+        today = datetime.now()
+    if not frequency or frequency == "daily":
+        return True
+    if isinstance(frequency, list):
+        day_name = _WEEKDAY_NAMES[today.weekday()]
+        return day_name in [d.lower()[:3] for d in frequency]
+    freq = frequency.lower()
+    if freq == "weekly":
+        return today.weekday() == 0
+    if freq == "biweekly":
+        return today.weekday() == 0 and today.isocalendar()[1] % 2 == 0
+    if freq == "monthly":
+        return today.day == 1
+    return True
+
 
 def _stable_id(url: str) -> int:
     """Generate a stable numeric ID from a URL (positive 32-bit int)."""
@@ -68,9 +89,21 @@ def fetch_all_feeds(config: Dict) -> List[Dict]:
 
     feeds = substack_cfg.get("feeds", [])
     max_items = substack_cfg.get("max_items", 10)
+    source_frequency = substack_cfg.get("frequency", "daily")
 
     all_stories = []
-    for feed_url in feeds:
+    for feed_entry in feeds:
+        # Feeds can be plain strings or {"url": "...", "frequency": "..."} dicts
+        if isinstance(feed_entry, dict):
+            feed_url = feed_entry["url"]
+            frequency = feed_entry.get("frequency", source_frequency)
+        else:
+            feed_url = feed_entry
+            frequency = source_frequency
+
+        if not _feed_is_due(frequency):
+            continue
+
         try:
             stories = fetch_feed(feed_url, max_items=max_items)
             all_stories.extend(stories)

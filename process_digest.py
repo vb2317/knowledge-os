@@ -54,47 +54,17 @@ def _extract_keywords(sentences: List[str], stop_words: set) -> List[str]:
 
 
 def summarize_comments(comments: List[Dict], descendants: int = 0) -> str:
-    """
-    Generate a 1-line summary of HN comments for digest display.
-    Simple extractive approach: pull key themes from top comments.
-    """
+    """Return the first sentence of the top HN comment, or a fallback string."""
     if not comments:
-        if descendants:
-            return f"{descendants} comments"
-        return None
+        return f"{descendants} comments" if descendants else None
 
-    stop_words = {
-        'this', 'that', 'have', 'with', 'they', 'from', 'were', 'been',
-        'would', 'could', 'should', 'about', 'which', 'their', 'there',
-        'what', 'when', 'will', 'more', 'some', 'than', 'them', 'like',
-        'just', 'also', 'into', 'very', 'does', 'your', 'much', 'most',
-        'each', 'only', 'even', 'want', 'really', 'think', 'know', 'people',
-        'thing', 'things', 'using', 'being', 'well', 'still', 'though',
-    }
-
-    # Extract first sentences from top 5 comments
-    sentences = []
-    for comment in comments[:5]:
-        text = comment.get('text', '')
-        if not text:
-            continue
+    text = comments[0].get('text', '')
+    if text:
         sent = _extract_first_sentence(text)
         if sent:
-            sentences.append(sent)
+            return sent
 
-    if not sentences:
-        if descendants:
-            return f"{descendants} comments"
-        return None
-
-    # Extract key themes
-    keywords = _extract_keywords(sentences, stop_words)
-    if keywords:
-        themes = ", ".join(keywords[:3])
-        return f"Discussing: {themes}"
-
-    # Fallback
-    return f"{descendants or len(comments)} comments"
+    return f"{descendants} comments" if descendants else None
 
 
 _WEEKDAY_NAMES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
@@ -119,6 +89,38 @@ def _source_is_due(frequency, today: datetime = None) -> bool:
     if freq == "quarterly":
         return today.day == 1 and today.month in (1, 4, 7, 10)
     return True  # unknown frequency → always include
+
+
+def _is_weekend(today: datetime = None) -> bool:
+    """Return True if today is Saturday or Sunday."""
+    if today is None:
+        today = datetime.now()
+    return today.weekday() in (5, 6)
+
+
+def _apply_weekend_mode(scored_stories, config, today=None):
+    """
+    Split stories into (top_matches, interesting_reads) for weekend digest.
+    - top_matches: stories whose max topic similarity >= weekend threshold, sorted by HN score
+    - interesting_reads: remaining stories with HN score >= interesting_min_score, sorted by score
+    """
+    wm = config.get("settings", {}).get("weekend_mode", {})
+    threshold = float(wm.get("similarity_threshold", 0.45))
+    max_top = int(wm.get("max_top_matches", 10))
+    interesting_count = int(wm.get("interesting_reads_count", 10))
+    interesting_min_score = int(wm.get("interesting_min_score", 100))
+
+    top_matches = [s for s, sim in scored_stories if sim >= threshold]
+    top_matches = sorted(top_matches, key=lambda s: s.get("score", 0), reverse=True)[:max_top]
+    top_match_urls = {s["url"] for s in top_matches}
+
+    interesting = [
+        s for s, _ in scored_stories
+        if s["url"] not in top_match_urls and s.get("score", 0) >= interesting_min_score
+    ]
+    interesting = sorted(interesting, key=lambda s: s.get("score", 0), reverse=True)[:interesting_count]
+
+    return top_matches, interesting
 
 
 def _filter_by_age(stories: List[Dict], max_age_days: int) -> List[Dict]:
@@ -202,6 +204,13 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
     matcher = TopicMatcher(config_path="config.json")
     matched_stories = matcher.match_stories(stories)
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Topic matching completed in {time.time() - matcher_start:.1f}s ({len(matched_stories)} matched)", file=sys.stderr)
+
+    # Score all stories for weekend mode (no threshold filter — needed for Interesting Reads pool)
+    wm_cfg = config.get("settings", {}).get("weekend_mode", {})
+    all_scored_stories = None
+    if wm_cfg.get("enabled"):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Scoring all stories for weekend mode...", file=sys.stderr)
+        all_scored_stories = matcher.score_all_stories(stories)
     
     # Process each story
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Storing {len(matched_stories)} stories in database...", file=sys.stderr)
@@ -257,6 +266,18 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
     # Filter notable authors that appear in current batch
     current_authors = {s['by'] for s in matched_stories}
     batch_notable = [a for a in notable_authors if a['author_name'] in current_authors]
+
+    # Merge manually followed HN users (highlighted regardless of story count)
+    followed_users = config.get('settings', {}).get('followed_hn_users', [])
+    if followed_users:
+        existing_notable_names = {a['author_name'] for a in batch_notable}
+        for username in followed_users:
+            if username in current_authors and username not in existing_notable_names:
+                batch_notable.append({
+                    'author_name': username,
+                    'story_count': 0,
+                    'topics': {},
+                })
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Notable authors identified in {time.time() - authors_start:.1f}s ({len(batch_notable)} in batch)", file=sys.stderr)
     
     # Record digest
@@ -277,25 +298,29 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
         )
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Digest recorded in {time.time() - digest_start:.1f}s", file=sys.stderr)
 
-    # Fetch comment summaries for matched stories
+    # Fetch comment summaries and author karma for matched stories
     if ENGAGEMENT_ENABLED and matched_stories:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Fetching comment summaries...", file=sys.stderr)
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Fetching comment summaries and author karma...", file=sys.stderr)
         comments_start = time.time()
         try:
             db_config = config['storage']['sqlite']
             comment_detector = EngagementDetector(db_config['db_path'])
+            karma_cache = {}
             for story in matched_stories:
                 story_id = story.get('id')
-                if not story_id:
-                    continue
-                try:
-                    comments = comment_detector.fetch_story_comments(story_id, max_depth=1)
-                    story['comment_summary'] = summarize_comments(comments, story.get('descendants', 0))
-                except Exception:
-                    story['comment_summary'] = None
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Comment summaries fetched in {time.time() - comments_start:.1f}s", file=sys.stderr)
+                if story_id:
+                    try:
+                        comments = comment_detector.fetch_story_comments(story_id, max_depth=1)
+                        story['comment_summary'] = summarize_comments(comments, story.get('descendants', 0))
+                    except Exception:
+                        story['comment_summary'] = None
+                author = story.get('by', '')
+                if author and author not in karma_cache:
+                    karma_cache[author] = comment_detector.fetch_user_karma(author)
+                story['author_karma'] = karma_cache.get(author)
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Comments and karma fetched in {time.time() - comments_start:.1f}s", file=sys.stderr)
         except Exception as e:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Warning: Comment summarization failed: {e}", file=sys.stderr)
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Warning: Comment/karma fetch failed: {e}", file=sys.stderr)
 
     # Detect engagement opportunities
     engagement_opportunities = []
@@ -325,18 +350,86 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
         'notable_authors': batch_notable,
         'digest_id': digest_id,
         'item_ids': item_ids,
-        'engagement_opportunities': engagement_opportunities
+        'engagement_opportunities': engagement_opportunities,
+        'all_scored_stories': all_scored_stories,
     }
 
-def generate_digest_text(result: Dict) -> str:
-    """Generate digest text from processed result"""
+def _format_story_lines(story, notable_authors):
+    """Return a list of lines for a single story entry."""
+    lines = []
+    title = story['title']
+    score = story['score']
+    author = story['by']
+    story_id = story.get('id')
+    descendants = story.get('descendants', 0)
+    comment_summary = story.get('comment_summary')
+
+    author_marker = ""
+    if notable_authors:
+        for notable in notable_authors:
+            if notable['author_name'] == author:
+                author_marker = " ⭐"
+                break
+
+    karma = story.get('author_karma')
+    karma_str = f"karma: {karma:,}" if karma is not None else ""
+    source_icon = "📰 " if story.get('source') == 'substack' else ""
+    lines.append(f"- [ ] {source_icon}{title}")
+    meta_parts = [f"↑{score}"]
+    if karma_str:
+        meta_parts.append(karma_str)
+    meta_parts.append(f"by {author}{author_marker}")
+    lines.append(f"  {' | '.join(meta_parts)}")
+    if comment_summary:
+        lines.append(f"  💬 {comment_summary}")
+    if story.get('source') == 'substack':
+        lines.append(f"  🔗 {story.get('url', '')}")
+    elif story_id:
+        lines.append(f"  🔗 https://news.ycombinator.com/item?id={story_id}")
+    else:
+        lines.append(f"  🔗 {story.get('url', '')}")
+    lines.append("  Notes: ")
+    return lines
+
+
+def generate_digest_text(result: Dict, config: Dict = None, weekend_sections=None) -> str:
+    """Generate digest text from processed result.
+
+    If weekend_sections is provided (a (top_matches, interesting_reads) tuple),
+    renders the weekend layout instead of the standard topic-grouped layout.
+    """
     stories = result['stories']
     notable_authors = result['notable_authors']
     engagement_opportunities = result.get('engagement_opportunities', [])
-    
+
     if not stories:
         return "🦅 *HN Digest* - Quiet day on the frontier. Use the time to build.\n\n_No relevant stories today._"
-    
+
+    # ── Weekend layout ────────────────────────────────────────────────────────
+    if weekend_sections is not None:
+        top_matches, interesting_reads = weekend_sections
+        wm = (config or {}).get("settings", {}).get("weekend_mode", {})
+        title = wm.get("digest_title", "Weekend Reads")
+        day_str = datetime.now().strftime("%a, %b %-d")
+
+        lines = []
+        lines.append(f"🌿 *{title}* — {day_str}")
+        lines.append(f"_{len(top_matches)} top matches · {len(interesting_reads)} interesting reads_\n")
+
+        lines.append("── Best Matches ──────────────────────")
+        for story in top_matches:
+            lines.extend(_format_story_lines(story, notable_authors))
+        lines.append("")
+
+        lines.append("── Interesting Reads ─────────────────")
+        for story in interesting_reads:
+            lines.extend(_format_story_lines(story, notable_authors))
+        lines.append("")
+
+        lines.append("_A quieter read for the weekend._")
+        return "\n".join(lines)
+
+    # ── Standard weekday layout ───────────────────────────────────────────────
     # Group by topic
     by_topic = {}
     for story in stories:
@@ -344,7 +437,7 @@ def generate_digest_text(result: Dict) -> str:
         if topic not in by_topic:
             by_topic[topic] = []
         by_topic[topic].append(story)
-    
+
     # Build digest
     lines = []
     lines.append("🦅 *HN Digest* - Afternoon Energy Boost")
@@ -357,40 +450,8 @@ def generate_digest_text(result: Dict) -> str:
     # Stories by topic
     for topic, topic_stories in by_topic.items():
         lines.append(f"*{topic}*")
-        
         for story in topic_stories[:5]:  # Max 5 per topic
-            title = story['title']
-            score = story['score']
-            author = story['by']
-            story_id = story.get('id')
-            descendants = story.get('descendants', 0)
-            comment_summary = story.get('comment_summary')
-
-            # Check if author is notable
-            author_marker = ""
-            if notable_authors:
-                for notable in notable_authors:
-                    if notable['author_name'] == author:
-                        author_marker = " ⭐"
-                        break
-
-            # Comment count display
-            comment_str = f"{descendants} comments" if descendants else "0 comments"
-
-            source_icon = "📰 " if story.get('source') == 'substack' else ""
-            lines.append(f"- [ ] {source_icon}{title}")
-            lines.append(f"  ↑{score} | {comment_str} | by {author}{author_marker}")
-            if comment_summary:
-                lines.append(f"  💬 {comment_summary}")
-            # Use HN discussion link for HN stories, article URL for other sources
-            if story.get('source') == 'substack':
-                lines.append(f"  🔗 {story.get('url', '')}")
-            elif story_id:
-                lines.append(f"  🔗 https://news.ycombinator.com/item?id={story_id}")
-            else:
-                lines.append(f"  🔗 {story.get('url', '')}")
-            lines.append(f"  Notes: ")
-        
+            lines.extend(_format_story_lines(story, notable_authors))
         lines.append("")  # Blank line between topics
     
     # Engagement opportunities section
@@ -425,7 +486,17 @@ if __name__ == "__main__":
     
     # Process stories
     result = process_stories(stories, config)
-    
+
+    # Check weekend mode
+    wm = config.get("settings", {}).get("weekend_mode", {})
+    weekend_sections = None
+    if wm.get("enabled") and _is_weekend():
+        scored_stories = result.get("all_scored_stories") or [
+            (s, max(s.get("all_topic_scores", {}).values(), default=0.0))
+            for s in result["stories"]
+        ]
+        weekend_sections = _apply_weekend_mode(scored_stories, config)
+
     # Generate digest
-    digest = generate_digest_text(result)
+    digest = generate_digest_text(result, config=config, weekend_sections=weekend_sections)
     print(digest)

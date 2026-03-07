@@ -4,6 +4,8 @@ import pytest
 from unittest.mock import patch, MagicMock
 from datetime import datetime
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def config(tmp_path):

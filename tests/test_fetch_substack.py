@@ -1,7 +1,8 @@
 """Tests for fetch_substack.py"""
 import pytest
+from datetime import datetime
 from unittest.mock import patch, MagicMock
-from fetch_substack import _stable_id, fetch_feed, fetch_all_feeds
+from fetch_substack import _stable_id, fetch_feed, fetch_all_feeds, _feed_is_due
 
 
 class TestStableId:
@@ -104,3 +105,57 @@ class TestFetchAllFeeds:
         }
         result = fetch_all_feeds(config)
         assert len(result) == 1
+
+
+class TestFeedIsDue:
+    def test_daily_always_true(self):
+        assert _feed_is_due("daily", datetime(2026, 3, 7)) is True
+
+    def test_none_always_true(self):
+        assert _feed_is_due(None, datetime(2026, 3, 7)) is True
+
+    def test_weekly_true_on_monday(self):
+        assert _feed_is_due("weekly", datetime(2026, 3, 2)) is True  # Monday
+
+    def test_weekly_false_on_saturday(self):
+        assert _feed_is_due("weekly", datetime(2026, 3, 7)) is False  # Saturday
+
+    def test_list_matches_day(self):
+        assert _feed_is_due(["mon", "wed", "fri"], datetime(2026, 3, 2)) is True
+
+    def test_list_no_match(self):
+        assert _feed_is_due(["mon", "wed"], datetime(2026, 3, 7)) is False  # Saturday
+
+
+class TestFetchAllFeedsPerFeedFrequency:
+    @patch("fetch_substack.fetch_feed")
+    def test_dict_feed_fetched(self, mock_fetch):
+        mock_fetch.return_value = [{"id": 1, "title": "Post"}]
+        config = {
+            "sources": {
+                "substack": {
+                    "enabled": True,
+                    "feeds": [{"url": "https://a.substack.com/feed", "frequency": "daily"}],
+                    "max_items": 5,
+                }
+            }
+        }
+        result = fetch_all_feeds(config)
+        assert len(result) == 1
+        mock_fetch.assert_called_once_with("https://a.substack.com/feed", max_items=5)
+
+    @patch("fetch_substack.fetch_feed")
+    @patch("fetch_substack._feed_is_due", return_value=False)
+    def test_skipped_when_not_due(self, mock_due, mock_fetch):
+        config = {
+            "sources": {
+                "substack": {
+                    "enabled": True,
+                    "feeds": [{"url": "https://a.substack.com/feed", "frequency": "weekly"}],
+                    "max_items": 5,
+                }
+            }
+        }
+        result = fetch_all_feeds(config)
+        assert result == []
+        mock_fetch.assert_not_called()

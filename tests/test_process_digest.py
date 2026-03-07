@@ -5,6 +5,8 @@ from process_digest import (
     _extract_first_sentence,
     _extract_keywords,
     _filter_by_age,
+    _is_weekend,
+    _apply_weekend_mode,
     _source_is_due,
     summarize_comments,
     generate_digest_text,
@@ -220,22 +222,20 @@ class TestSummarizeComments:
         comments = [
             {"text": "<p>Python performance is impressive. Very cool.</p>"},
             {"text": "<p>Python async support matters. Great work.</p>"},
-            {"text": "<p>The python ecosystem keeps growing. Nice.</p>"},
         ]
         result = summarize_comments(comments)
         assert result is not None
-        assert "Discussing:" in result
+        assert "impressive" in result  # first sentence of top comment
 
     def test_comments_no_text(self):
         comments = [{"text": ""}, {"text": ""}]
         result = summarize_comments(comments, descendants=10)
         assert result == "10 comments"
 
-    def test_comments_no_keywords_fallback(self):
-        # Very short words that won't match 4+ char regex
-        comments = [{"text": "ok lol yes no"}]
-        result = summarize_comments(comments, descendants=5)
-        assert result == "5 comments"
+    def test_comments_returns_top_comment_sentence(self):
+        comments = [{"text": "Short thought. More after."}]
+        result = summarize_comments(comments)
+        assert result == "Short thought."
 
 
 # --- generate_digest_text ---
@@ -316,6 +316,23 @@ class TestGenerateDigestText:
         assert "- [ ] Main Story" in result
         assert "## 📖 Read Tracker" not in result
 
+    def test_weekend_sections_renders_two_sections(self):
+        story = self._make_story()
+        interesting = self._make_story(title="Viral HN Post", score=500, topic="Other", id=99999,
+                                       url="https://example.com/viral")
+        result = {
+            "stories": [story, interesting],
+            "notable_authors": [],
+            "engagement_opportunities": [],
+        }
+        config = {"settings": {"weekend_mode": {"digest_title": "Weekend Reads"}}}
+        output = generate_digest_text(result, config=config, weekend_sections=([story], [interesting]))
+        assert "Weekend Reads" in output
+        assert "Best Matches" in output
+        assert "Interesting Reads" in output
+        assert "Test Story" in output
+        assert "Viral HN Post" in output
+
     def test_multiple_topics_grouped(self):
         s1 = self._make_story(title="AI thing", topic="AI/ML")
         s2 = self._make_story(title="Rust thing", topic="Systems", id=99999,
@@ -327,3 +344,90 @@ class TestGenerateDigestText:
         })
         assert "*AI/ML*" in result
         assert "*Systems*" in result
+
+
+# --- _is_weekend ---
+
+class TestIsWeekend:
+    def test_saturday_is_weekend(self):
+        assert _is_weekend(datetime(2026, 3, 7)) is True  # Saturday
+
+    def test_sunday_is_weekend(self):
+        assert _is_weekend(datetime(2026, 3, 8)) is True  # Sunday
+
+    def test_thursday_is_not_weekend(self):
+        assert _is_weekend(datetime(2026, 3, 5)) is False  # Thursday
+
+    def test_monday_is_not_weekend(self):
+        assert _is_weekend(datetime(2026, 3, 2)) is False  # Monday
+
+    def test_friday_is_not_weekend(self):
+        assert _is_weekend(datetime(2026, 3, 6)) is False  # Friday
+
+
+# --- _apply_weekend_mode ---
+
+class TestApplyWeekendMode:
+    _config = {
+        "settings": {
+            "weekend_mode": {
+                "similarity_threshold": 0.45,
+                "max_top_matches": 10,
+                "interesting_reads_count": 10,
+                "interesting_min_score": 100,
+            }
+        }
+    }
+
+    def _story(self, url, score, title="T"):
+        return {"url": url, "score": score, "title": title, "by": "u", "source": "hackernews"}
+
+    def test_splits_by_threshold(self):
+        high = self._story("http://a.com", 300)
+        low = self._story("http://b.com", 200)
+        scored = [(high, 0.6), (low, 0.2)]
+        top, interesting = _apply_weekend_mode(scored, self._config)
+        assert high in top
+        assert low not in top
+        assert low in interesting
+
+    def test_top_matches_sorted_by_score(self):
+        s1 = self._story("http://a.com", 100)
+        s2 = self._story("http://b.com", 500)
+        scored = [(s1, 0.9), (s2, 0.8)]
+        top, _ = _apply_weekend_mode(scored, self._config)
+        assert top[0] == s2  # higher score first
+
+    def test_interesting_excludes_top_matches(self):
+        s1 = self._story("http://a.com", 300)
+        s2 = self._story("http://b.com", 200)
+        scored = [(s1, 0.7), (s2, 0.1)]
+        top, interesting = _apply_weekend_mode(scored, self._config)
+        urls_in_top = {s["url"] for s in top}
+        for s in interesting:
+            assert s["url"] not in urls_in_top
+
+    def test_interesting_min_score_filter(self):
+        low_score = self._story("http://c.com", 50)
+        scored = [(low_score, 0.1)]
+        _, interesting = _apply_weekend_mode(scored, self._config)
+        assert low_score not in interesting  # score < 100
+
+    def test_interesting_sorted_by_score(self):
+        s1 = self._story("http://a.com", 150)
+        s2 = self._story("http://b.com", 400)
+        scored = [(s1, 0.1), (s2, 0.2)]
+        _, interesting = _apply_weekend_mode(scored, self._config)
+        assert interesting[0] == s2
+
+    def test_respects_max_top_matches(self):
+        stories = [self._story(f"http://{i}.com", 100 + i) for i in range(20)]
+        scored = [(s, 0.9) for s in stories]
+        top, _ = _apply_weekend_mode(scored, self._config)
+        assert len(top) <= 10
+
+    def test_respects_interesting_reads_count(self):
+        stories = [self._story(f"http://{i}.com", 200 + i) for i in range(20)]
+        scored = [(s, 0.1) for s in stories]
+        _, interesting = _apply_weekend_mode(scored, self._config)
+        assert len(interesting) <= 10

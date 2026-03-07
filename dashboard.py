@@ -563,31 +563,66 @@ else:
 
         with st.expander("Sources"):
             with st.form("sources_form"):
-                hn_enabled = st.checkbox(
-                    "Hacker News enabled",
-                    value=cfg["sources"]["hackernews"].get("enabled", True),
+                _freq_opts = ["daily", "weekly", "biweekly", "monthly", "quarterly"]
+
+                st.markdown("**Hacker News**")
+                hn_cfg = cfg["sources"]["hackernews"]
+                hn_enabled = st.checkbox("Enabled", value=hn_cfg.get("enabled", True), key="hn_enabled")
+                _hn_freq_val = hn_cfg.get("frequency", "daily")
+                hn_freq = st.selectbox(
+                    "Frequency",
+                    _freq_opts,
+                    index=_freq_opts.index(_hn_freq_val) if _hn_freq_val in _freq_opts else 0,
+                    key="hn_freq",
                 )
-                sub_enabled = st.checkbox(
-                    "Substack enabled",
-                    value=cfg["sources"]["substack"].get("enabled", True),
+
+                st.markdown("**Substack**")
+                sub_cfg = cfg["sources"]["substack"]
+                sub_enabled = st.checkbox("Enabled", value=sub_cfg.get("enabled", True), key="sub_enabled")
+                _sub_freq_val = sub_cfg.get("frequency", "daily")
+                sub_freq = st.selectbox(
+                    "Default frequency",
+                    _freq_opts,
+                    index=_freq_opts.index(_sub_freq_val) if _sub_freq_val in _freq_opts else 0,
+                    key="sub_freq",
+                    help="Default for feeds without a per-feed override.",
                 )
-                feeds_raw = st.text_area(
+
+                # Normalize feeds: extract URLs for display, preserve dict entries on save
+                raw_feeds = sub_cfg.get("feeds", [])
+                _feed_map = {
+                    (f["url"] if isinstance(f, dict) else f): f
+                    for f in raw_feeds
+                }
+                feeds_text = st.text_area(
                     "Substack feeds (one URL per line)",
-                    value="\n".join(cfg["sources"]["substack"].get("feeds", [])),
+                    value="\n".join(_feed_map.keys()),
                     height=120,
+                    help="Per-feed frequency overrides (set via config as dicts) are preserved when you save.",
                 )
+                _overrides = [u for u, f in _feed_map.items() if isinstance(f, dict)]
+                if _overrides:
+                    st.caption(f"{len(_overrides)} feed(s) have per-feed frequency overrides — preserved on save.")
+
                 sub_max = st.number_input(
                     "Max Substack items per feed",
                     min_value=1,
                     max_value=50,
-                    value=int(cfg["sources"]["substack"].get("max_items", 10)),
+                    value=int(sub_cfg.get("max_items", 10)),
                 )
+
                 if st.form_submit_button("Save sources"):
-                    cfg["sources"]["hackernews"]["enabled"] = hn_enabled
-                    cfg["sources"]["substack"]["enabled"] = sub_enabled
-                    cfg["sources"]["substack"]["feeds"] = [
-                        u.strip() for u in feeds_raw.splitlines() if u.strip()
+                    new_urls = [u.strip() for u in feeds_text.splitlines() if u.strip()]
+                    # Preserve dict entries for known URLs; new URLs saved as plain strings
+                    new_feeds = [
+                        _feed_map[u] if u in _feed_map and isinstance(_feed_map[u], dict) else u
+                        for u in new_urls
                     ]
+                    cfg["sources"]["hackernews"]["enabled"] = hn_enabled
+                    cfg["sources"]["hackernews"]["frequency"] = hn_freq
+                    cfg["sources"]["substack"]["enabled"] = sub_enabled
+                    cfg["sources"]["substack"]["frequency"] = sub_freq
+                    cfg["sources"]["substack"]["feeds"] = new_feeds
                     cfg["sources"]["substack"]["max_items"] = int(sub_max)
                     save_config(cfg)
                     st.success("Sources saved.")
@@ -595,22 +630,28 @@ else:
         with st.expander("Settings"):
             with st.form("settings_form"):
                 s = cfg["settings"]
-                max_stories = st.slider("max_stories", 5, 100, int(s.get("max_stories", 30)))
-                min_score = st.slider("min_score (HN upvotes)", 0, 500, int(s.get("min_score", 50)))
-                sim_thresh = st.slider(
-                    "similarity_threshold",
-                    0.0, 1.0, float(s.get("similarity_threshold", 0.3)), step=0.01,
-                )
-                notable_thresh = st.number_input(
-                    "notable_author_threshold",
-                    min_value=1,
-                    max_value=20,
-                    value=int(s.get("notable_author_threshold", 3)),
-                )
-                digest_time = st.text_input("digest_time (HH:MM)", value=s.get("digest_time", "14:00"))
+                col1, col2 = st.columns(2)
+                with col1:
+                    max_stories = st.slider("max_stories", 5, 100, int(s.get("max_stories", 30)))
+                    min_score = st.slider("min_score (HN upvotes)", 0, 500, int(s.get("min_score", 50)))
+                    max_age = st.slider("max_age_days", 1, 30, int(s.get("max_age_days", 7)),
+                                        help="Stories older than this are dropped before topic matching.")
+                with col2:
+                    sim_thresh = st.slider(
+                        "similarity_threshold",
+                        0.0, 1.0, float(s.get("similarity_threshold", 0.3)), step=0.01,
+                    )
+                    notable_thresh = st.number_input(
+                        "notable_author_threshold",
+                        min_value=1,
+                        max_value=20,
+                        value=int(s.get("notable_author_threshold", 3)),
+                    )
+                    digest_time = st.text_input("digest_time (HH:MM)", value=s.get("digest_time", "14:00"))
                 if st.form_submit_button("Save settings"):
                     cfg["settings"]["max_stories"] = max_stories
                     cfg["settings"]["min_score"] = min_score
+                    cfg["settings"]["max_age_days"] = max_age
                     cfg["settings"]["similarity_threshold"] = sim_thresh
                     cfg["settings"]["notable_author_threshold"] = int(notable_thresh)
                     cfg["settings"]["digest_time"] = digest_time

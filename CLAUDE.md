@@ -44,7 +44,15 @@ fetch_substack.py ─┘        ↓
 - `fetch_substack.py` — RSS fetcher for Substack feeds (config-driven, `feedparser` library)
 - `storage_interface.py` — abstract base; `storage_sqlite.py` implements it
 - `match_topics.py` — sentence-transformers semantic matching (heavy import, avoid in tests)
-- `dashboard.py` — local Streamlit app (6 tabs: Overview, Browse, Config, Stories, Authors, Simulator); reads DB and config directly, never writes to DB
+- `dashboard.py` — local Streamlit app with PM/Engineering mode switcher (sidebar radio); PM view: Overview (metrics + match quality), Browse, Authors; Engg view: Pipeline Health, Stories, Config, Simulator; reads DB and config directly, never writes to DB (except Config tab)
+
+## Learning Goals
+
+I'm an engineer using this project to build product management skills. When PM mode is active:
+- Ask what problem a feature solves and for whom before discussing implementation
+- Frame tradeoffs as user value vs effort, not technical complexity
+- Surface: "What does success look like?" before writing code
+- Reference pm/PRODUCT_STRATEGY.md for product context; pm/PM_NOTEBOOK.md for learning notes
 
 ## Code Conventions
 

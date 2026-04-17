@@ -469,7 +469,11 @@ def generate_digest_text(result: Dict, config: Dict = None, weekend_sections=Non
         lines.append("")
     
     # Footer
+    lines.append("")
     lines.append("_Keep building. The frontier moves forward._")
+    lines.append("")
+    lines.append("💬 *Feedback:* Reply with story numbers + action")
+    lines.append("   Example: `1,3 👍  2 📌  4 skip`")
 
     return "\n".join(lines)
 
@@ -500,3 +504,23 @@ if __name__ == "__main__":
     # Generate digest
     digest = generate_digest_text(result, config=config, weekend_sections=weekend_sections)
     print(digest)
+    
+    # Save story metadata for feedback system
+    metadata = {
+        'stories': [
+            {
+                'id': s.get('id'),
+                'title': s['title'],
+                'url': s['url'],
+                'score': s['score'],
+                'by': s['by']
+            }
+            for s in result['stories'][:10]  # Max 10 for feedback
+        ]
+    }
+    
+    import json
+    from pathlib import Path
+    metadata_path = Path(__file__).parent / 'digest_metadata.json'
+    with open(metadata_path, 'w') as f:
+        json.dump(metadata, f, indent=2)

@@ -36,10 +36,19 @@
 - [ ] **Feedback mechanism** - via whatsapp
 - [ ] **Store feedback** - store the feedback as: opening links, links engaged with, linked stored in the memo db
 
+### UX
+- [ ] **Redesign the dashboard** - make it super user friendly, less clunky. Keep the streamlit version for all the bells and whistles. Create one for external users.
+
+### Similar
+- [ ] https://www.kerns.ai
+- [ ] https://github.com/herol3oy/kiosk24
+
 ### Features
 - [ ] **Thread continuity** - "You saw Story X yesterday, here's an update/follow-up"
 - [ ] **Author highlights** - "Author Y (who wrote Z last week) posted this"
 - [ ] **Weekly summary mode** - Option for digest-of-digests
+- [ ] **Weekend articles logic** Review the interesting articles logic: update the code with improvements
+
 
 ### Infrastructure
 - [ ] **Logging & metrics** - Track story volume, match rates, delivery timing

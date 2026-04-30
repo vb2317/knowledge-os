@@ -97,6 +97,20 @@ class TestItems:
         assert is_new2 is True   # newer published_at → re-surface
         assert is_new3 is False  # same published_at → skip
 
+    def test_external_id_persisted(self, storage):
+        item_id, _ = storage.insert_item(
+            url="https://example.com/hn",
+            title="HN Story",
+            source="hackernews",
+            author="pg",
+            score=100,
+            fetched_at="2026-01-01T00:00:00",
+            published_at="2026-01-01T12:00:00",
+            external_id="12345",
+        )
+        item = storage.get_item(item_id)
+        assert item["external_id"] == "12345"
+
 
 class TestTopics:
     def test_insert_and_get(self, storage, user_id):
@@ -158,34 +172,45 @@ class TestFeedback:
 
 class TestAuthors:
     def test_upsert_new(self, storage):
-        storage.upsert_author("newauthor", item_id=1,
+        user_id = storage.get_or_create_user("u1")
+        storage.upsert_author(user_id, "newauthor", item_id=1,
                              topic_scores={"AI/ML": 0.9})
-        authors = storage.get_notable_authors(user_id=1, min_count=1)
+        authors = storage.get_notable_authors(user_id=user_id, min_count=1)
         assert len(authors) == 1
         assert authors[0]["author_name"] == "newauthor"
 
     def test_upsert_increments(self, storage):
-        storage.upsert_author("repeat", item_id=1,
+        user_id = storage.get_or_create_user("u1")
+        storage.upsert_author(user_id, "repeat", item_id=1,
                              topic_scores={"AI/ML": 0.5})
-        storage.upsert_author("repeat", item_id=2,
+        storage.upsert_author(user_id, "repeat", item_id=2,
                              topic_scores={"AI/ML": 0.8})
-        authors = storage.get_notable_authors(user_id=1, min_count=1)
+        authors = storage.get_notable_authors(user_id=user_id, min_count=1)
         author = [a for a in authors if a["author_name"] == "repeat"][0]
         assert author["story_count"] == 2
 
     def test_duplicate_item_no_inflate(self, storage):
         """Same item_id called multiple times should not inflate story_count."""
-        storage.upsert_author("dup", item_id=1, topic_scores={"AI/ML": 0.5})
-        storage.upsert_author("dup", item_id=1, topic_scores={"AI/ML": 0.5})
-        storage.upsert_author("dup", item_id=1, topic_scores={"AI/ML": 0.5})
-        authors = storage.get_notable_authors(user_id=1, min_count=1)
+        user_id = storage.get_or_create_user("u1")
+        storage.upsert_author(user_id, "dup", item_id=1, topic_scores={"AI/ML": 0.5})
+        storage.upsert_author(user_id, "dup", item_id=1, topic_scores={"AI/ML": 0.5})
+        storage.upsert_author(user_id, "dup", item_id=1, topic_scores={"AI/ML": 0.5})
+        authors = storage.get_notable_authors(user_id=user_id, min_count=1)
         author = [a for a in authors if a["author_name"] == "dup"][0]
         assert author["story_count"] == 1
 
     def test_notable_threshold(self, storage):
-        storage.upsert_author("once", item_id=1, topic_scores={"X": 0.5})
+        user_id = storage.get_or_create_user("u1")
+        storage.upsert_author(user_id, "once", item_id=1, topic_scores={"X": 0.5})
         # Default min_count=3 should filter this out
-        assert storage.get_notable_authors(user_id=1, min_count=3) == []
+        assert storage.get_notable_authors(user_id=user_id, min_count=3) == []
+
+    def test_authors_are_isolated_per_user(self, storage):
+        user1 = storage.get_or_create_user("u1")
+        user2 = storage.get_or_create_user("u2")
+        storage.upsert_author(user1, "sharedauthor", item_id=1, topic_scores={"AI/ML": 0.9})
+        assert storage.get_notable_authors(user_id=user1, min_count=1)
+        assert storage.get_notable_authors(user_id=user2, min_count=1) == []
 
 
 class TestDigests:

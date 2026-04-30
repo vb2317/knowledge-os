@@ -209,3 +209,40 @@ class TestPipelineIntegration:
             # Old story should be filtered before matching — matcher never called
             mock_matcher.match_stories.assert_called_once_with([])
             assert result["stories"] == []
+
+    def test_weekend_mode_only_surfaces_new_scored_stories(self, config, sample_stories):
+        config["settings"]["weekend_mode"] = {
+            "enabled": True,
+            "similarity_threshold": 0.45,
+            "max_top_matches": 10,
+            "interesting_reads_count": 10,
+            "interesting_min_score": 100,
+        }
+
+        matched = dict(sample_stories[0])
+        matched["matched_topic"] = "AI/ML/LLMs"
+        matched["all_topic_scores"] = {"AI/ML/LLMs": 0.85, "Philosophy": 0.1}
+
+        interesting = dict(sample_stories[1])
+        interesting["all_topic_scores"] = {"AI/ML/LLMs": 0.2, "Philosophy": 0.25}
+
+        mock_matcher = MagicMock()
+        mock_matcher.match_stories.return_value = [matched]
+        mock_matcher.score_all_stories.return_value = [(matched, 0.85), (interesting, 0.25)]
+
+        with patch("process_digest.TopicMatcher", return_value=mock_matcher), \
+             patch("process_digest.ENGAGEMENT_ENABLED", False), \
+             patch("process_digest._is_weekend", return_value=True):
+
+            from process_digest import process_stories
+
+            first = process_stories(sample_stories, config)
+            assert [story["title"] for story in first["stories"]] == [
+                "New Transformer Architecture Beats GPT-5",
+                "Stoicism and Software Engineering",
+            ]
+            assert len(first["item_ids"]) == 2
+
+            second = process_stories(sample_stories, config)
+            assert second["stories"] == []
+            assert second["item_ids"] == []

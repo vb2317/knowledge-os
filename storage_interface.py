@@ -20,7 +20,8 @@ class StorageInterface(ABC):
     @abstractmethod
     def insert_item(self, url: str, title: str, source: str, author: str,
                    score: int, fetched_at: str, published_at: str = '',
-                   embedding_id: Optional[str] = None) -> Tuple[int, bool]:
+                   embedding_id: Optional[str] = None,
+                   external_id: Optional[str] = None) -> Tuple[int, bool]:
         """Insert item and return (item_id, is_new).
         is_new=True if newly inserted OR if published_at is newer than stored."""
         pass
@@ -76,7 +77,8 @@ class StorageInterface(ABC):
     
     # Authors
     @abstractmethod
-    def upsert_author(self, author_name: str, item_id: int, topic_scores: Dict[str, float]):
+    def upsert_author(self, user_id: int, author_name: str, item_id: int,
+                      topic_scores: Dict[str, float]):
         """Insert or update author stats"""
         pass
     

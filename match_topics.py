@@ -9,14 +9,17 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 
 class TopicMatcher:
-    def __init__(self, config_path: str = "config.json"):
+    def __init__(self, config_path: str = "config.json", config: Dict = None):
         import sys
         import time
         from datetime import datetime
         
         init_start = time.time()
-        with open(config_path) as f:
-            self.config = json.load(f)
+        if config is not None:
+            self.config = config
+        else:
+            with open(config_path) as f:
+                self.config = json.load(f)
         
         # Load embedding model
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Loading embedding model (all-MiniLM-L6-v2)...", file=sys.stderr)

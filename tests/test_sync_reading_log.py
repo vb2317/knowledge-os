@@ -1,6 +1,7 @@
 """Tests for sync_reading_log.py"""
 import pytest
-from sync_reading_log import parse_read_items
+from sync_reading_log import parse_read_items, _lookup_item_id
+from storage_sqlite import SQLiteStorage
 
 
 SAMPLE_DIGEST = """\
@@ -73,6 +74,7 @@ class TestParseReadItems:
         by_title = {i["title"]: i for i in items}
         assert by_title["Cool AI Tool"]["note"] == "Really impressive demo"
         assert by_title["Show HN: My Project"]["note"] == ""
+        assert by_title["Cool AI Tool"]["link"] == "https://news.ycombinator.com/item?id=1"
 
     def test_multiline_notes(self):
         items = parse_read_items(MULTILINE_NOTES)
@@ -105,3 +107,54 @@ class TestParseReadItems:
         md = "- [x] 🔥 Hot Take on AI\n  Notes: \n"
         items = parse_read_items(md)
         assert items[0]["title"] == "Hot Take on AI"
+
+
+class TestLookupItemId:
+    def test_prefers_hn_external_id_over_title(self, tmp_path):
+        storage = SQLiteStorage(db_path=str(tmp_path / "test.db"))
+        storage.insert_item(
+            url="https://example.com/older",
+            title="Duplicate Title",
+            source="hackernews",
+            author="a",
+            score=1,
+            fetched_at="2026-01-01",
+            published_at="2026-01-01T00:00:00",
+            external_id="1",
+        )
+        expected_id, _ = storage.insert_item(
+            url="https://example.com/newer",
+            title="Duplicate Title",
+            source="hackernews",
+            author="b",
+            score=1,
+            fetched_at="2026-01-02",
+            published_at="2026-01-02T00:00:00",
+            external_id="2",
+        )
+
+        row = _lookup_item_id(storage, {
+            "title": "Duplicate Title",
+            "note": "",
+            "link": "https://news.ycombinator.com/item?id=2",
+        })
+        assert row["item_id"] == expected_id
+
+    def test_substack_lookup_uses_article_url(self, tmp_path):
+        storage = SQLiteStorage(db_path=str(tmp_path / "test.db"))
+        expected_id, _ = storage.insert_item(
+            url="https://example.com/post",
+            title="Weekly Note",
+            source="substack",
+            author="writer",
+            score=0,
+            fetched_at="2026-01-01",
+            published_at="2026-01-01T00:00:00",
+        )
+
+        row = _lookup_item_id(storage, {
+            "title": "Weekly Note",
+            "note": "",
+            "link": "https://example.com/post",
+        })
+        assert row["item_id"] == expected_id

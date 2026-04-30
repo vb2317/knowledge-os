@@ -5,9 +5,9 @@ Parse checked items from a digest .md file and sync read status to the DB.
 Usage:
     venv/bin/python sync_reading_log.py knos-digest/2026-02-24.md
 """
+import json
 import re
 import sys
-import json
 from storage_interface import get_storage
 
 
@@ -23,7 +23,7 @@ def parse_read_items(md_text: str) -> list[dict]:
 
     Notes are gathered from indented lines below until the next list item.
 
-    Returns list of dicts: {'title': str, 'note': str}
+    Returns list of dicts: {'title': str, 'note': str, 'link': str}
     """
     results = []
     lines = md_text.splitlines()
@@ -36,9 +36,15 @@ def parse_read_items(md_text: str) -> list[dict]:
             title = m.group(1).strip()
             # Collect indented note lines below
             note_lines = []
+            link = ""
             j = i + 1
             while j < len(lines) and not lines[j].startswith('- ['):
                 content = lines[j]
+                link_match = re.match(r'^\s+🔗\s*(\S+)\s*$', content)
+                if link_match:
+                    link = link_match.group(1).strip()
+                    j += 1
+                    continue
                 # Skip metadata lines (score, link, comment summary, action prompt)
                 if re.match(r'^\s+(↑|🔗|💬|→)\s*', content):
                     j += 1
@@ -53,11 +59,44 @@ def parse_read_items(md_text: str) -> list[dict]:
                     note_lines.append(content.strip())
                 j += 1
             note = "\n".join(note_lines).strip()
-            results.append({'title': title, 'note': note})
+            results.append({'title': title, 'note': note, 'link': link})
             i = j
             continue
         i += 1
     return results
+
+
+def _lookup_item_id(storage, item: dict):
+    """Resolve a digest item to a DB row using the most specific identifier available."""
+    link = item.get('link', '')
+    if link:
+        hn_match = re.search(r'news\.ycombinator\.com/item\?id=(\d+)', link)
+        if hn_match:
+            conn = storage._get_conn()
+            c = conn.cursor()
+            c.execute(
+                'SELECT item_id, title FROM items WHERE source = ? AND external_id = ?',
+                ('hackernews', hn_match.group(1))
+            )
+            row = c.fetchone()
+            conn.close()
+            if row:
+                return row
+
+        conn = storage._get_conn()
+        c = conn.cursor()
+        c.execute('SELECT item_id, title FROM items WHERE url = ?', (link,))
+        row = c.fetchone()
+        conn.close()
+        if row:
+            return row
+
+    conn = storage._get_conn()
+    c = conn.cursor()
+    c.execute('SELECT item_id, title FROM items WHERE title = ?', (item['title'],))
+    row = c.fetchone()
+    conn.close()
+    return row
 
 
 def sync_to_db(read_items: list[dict], config_path: str = "config.json") -> list[dict]:
@@ -78,12 +117,7 @@ def sync_to_db(read_items: list[dict], config_path: str = "config.json") -> list
 
     synced = []
     for item in read_items:
-        # Search by title match in items table
-        conn = storage._get_conn()
-        c = conn.cursor()
-        c.execute('SELECT item_id, title FROM items WHERE title = ?', (item['title'],))
-        row = c.fetchone()
-        conn.close()
+        row = _lookup_item_id(storage, item)
 
         if not row:
             print(f"  [skip] Not found in DB: {item['title']}")

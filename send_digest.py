@@ -5,12 +5,16 @@ The cron agent will handle sending via message tool
 """
 import subprocess
 import sys
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 def main():
     # Run the digest generation
     result = subprocess.run(
         ['./run_digest.sh'],
-        cwd='/Users/vb/.openclaw/workspace/hn-digest',
+        cwd=PROJECT_ROOT,
         capture_output=True,
         text=True
     )
@@ -20,7 +24,7 @@ def main():
         sys.exit(1)
     
     # Read and output the digest
-    with open('/Users/vb/.openclaw/workspace/hn-digest/digest.txt') as f:
+    with open(PROJECT_ROOT / 'digest.txt') as f:
         digest = f.read()
     
     print(digest)

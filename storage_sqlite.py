@@ -46,6 +46,7 @@ class SQLiteStorage(StorageInterface):
                 fetched_at TEXT NOT NULL,
                 published_at TEXT NOT NULL DEFAULT '',
                 embedding_id TEXT,
+                external_id TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(url)
             )
@@ -105,6 +106,31 @@ class SQLiteStorage(StorageInterface):
                 last_seen TEXT DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS user_authors (
+                user_id INTEGER NOT NULL,
+                author_name TEXT NOT NULL,
+                story_count INTEGER DEFAULT 0,
+                total_score REAL DEFAULT 0.0,
+                topics TEXT,
+                first_seen TEXT DEFAULT CURRENT_TIMESTAMP,
+                last_seen TEXT DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, author_name),
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        ''')
+
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS user_author_items (
+                user_id INTEGER NOT NULL,
+                author_name TEXT NOT NULL,
+                item_id INTEGER NOT NULL,
+                PRIMARY KEY (user_id, author_name, item_id),
+                FOREIGN KEY (user_id) REFERENCES users(user_id),
+                FOREIGN KEY (item_id) REFERENCES items(item_id)
+            )
+        ''')
         
         # Digests table (delivery log)
         c.execute('''
@@ -118,17 +144,24 @@ class SQLiteStorage(StorageInterface):
             )
         ''')
         
-        # Indexes
-        c.execute('CREATE INDEX IF NOT EXISTS idx_items_url ON items(url)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_items_author ON items(author)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_feedback_user ON feedback(user_id)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_digests_user ON digests(user_id)')
-
-        # Migration: add published_at if missing (existing DBs)
+        # Migrations for existing DBs must run before indexes that depend on
+        # newly added columns.
         try:
             c.execute("ALTER TABLE items ADD COLUMN published_at TEXT NOT NULL DEFAULT ''")
         except sqlite3.OperationalError:
             pass  # column already exists
+
+        try:
+            c.execute("ALTER TABLE items ADD COLUMN external_id TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
+        # Indexes
+        c.execute('CREATE INDEX IF NOT EXISTS idx_items_url ON items(url)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_items_author ON items(author)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_items_source_external_id ON items(source, external_id)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_feedback_user ON feedback(user_id)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_digests_user ON digests(user_id)')
 
         conn.commit()
         conn.close()
@@ -136,15 +169,16 @@ class SQLiteStorage(StorageInterface):
     # Items
     def insert_item(self, url: str, title: str, source: str, author: str,
                    score: int, fetched_at: str, published_at: str = '',
-                   embedding_id: Optional[str] = None) -> Tuple[int, bool]:
+                   embedding_id: Optional[str] = None,
+                   external_id: Optional[str] = None) -> Tuple[int, bool]:
         conn = self._get_conn()
         c = conn.cursor()
 
         c.execute('''
             INSERT OR IGNORE INTO items
-            (url, title, source, author, score, fetched_at, published_at, embedding_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (url, title, source, author, score, fetched_at, published_at, embedding_id))
+            (url, title, source, author, score, fetched_at, published_at, embedding_id, external_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (url, title, source, author, score, fetched_at, published_at, embedding_id, external_id))
 
         if c.lastrowid:
             item_id = c.lastrowid
@@ -158,11 +192,17 @@ class SQLiteStorage(StorageInterface):
             if published_at and published_at > stored:
                 # Article updated — refresh title/score, re-surface in digest
                 c.execute('''
-                    UPDATE items SET title=?, score=?, published_at=?, fetched_at=?
+                    UPDATE items
+                    SET title=?, score=?, published_at=?, fetched_at=?, external_id=COALESCE(?, external_id)
                     WHERE item_id=?
-                ''', (title, score, published_at, fetched_at, item_id))
+                ''', (title, score, published_at, fetched_at, external_id, item_id))
                 is_new = True
             else:
+                if external_id:
+                    c.execute(
+                        'UPDATE items SET external_id = COALESCE(external_id, ?) WHERE item_id = ?',
+                        (external_id, item_id)
+                    )
                 is_new = False
 
         conn.commit()
@@ -285,26 +325,23 @@ class SQLiteStorage(StorageInterface):
         return feedback
     
     # Authors
-    def upsert_author(self, author_name: str, item_id: int, topic_scores: Dict[str, float]):
+    def upsert_author(self, user_id: int, author_name: str, item_id: int,
+                      topic_scores: Dict[str, float]):
         conn = self._get_conn()
         c = conn.cursor()
 
         # Deduplicate: only count each item once per author
         c.execute('''
-            CREATE TABLE IF NOT EXISTS author_items (
-                author_name TEXT NOT NULL,
-                item_id INTEGER NOT NULL,
-                PRIMARY KEY (author_name, item_id)
-            )
-        ''')
-        c.execute('''
-            INSERT OR IGNORE INTO author_items (author_name, item_id)
-            VALUES (?, ?)
-        ''', (author_name, item_id))
+            INSERT OR IGNORE INTO user_author_items (user_id, author_name, item_id)
+            VALUES (?, ?, ?)
+        ''', (user_id, author_name, item_id))
         is_new_item = c.rowcount > 0
 
         # Get existing author
-        c.execute('SELECT * FROM authors WHERE author_name = ?', (author_name,))
+        c.execute(
+            'SELECT * FROM user_authors WHERE user_id = ? AND author_name = ?',
+            (user_id, author_name)
+        )
         existing = c.fetchone()
 
         if existing:
@@ -318,26 +355,26 @@ class SQLiteStorage(StorageInterface):
 
             if is_new_item:
                 c.execute('''
-                    UPDATE authors
+                    UPDATE user_authors
                     SET story_count = story_count + 1,
                         total_score = total_score + ?,
                         topics = ?,
                         last_seen = CURRENT_TIMESTAMP
-                    WHERE author_name = ?
-                ''', (max(topic_scores.values()), json.dumps(existing_topics), author_name))
+                    WHERE user_id = ? AND author_name = ?
+                ''', (max(topic_scores.values()), json.dumps(existing_topics), user_id, author_name))
             else:
                 c.execute('''
-                    UPDATE authors
+                    UPDATE user_authors
                     SET topics = ?,
                         last_seen = CURRENT_TIMESTAMP
-                    WHERE author_name = ?
-                ''', (json.dumps(existing_topics), author_name))
+                    WHERE user_id = ? AND author_name = ?
+                ''', (json.dumps(existing_topics), user_id, author_name))
         else:
             # Insert new author
             c.execute('''
-                INSERT INTO authors (author_name, story_count, total_score, topics)
-                VALUES (?, 1, ?, ?)
-            ''', (author_name, max(topic_scores.values()), json.dumps(topic_scores)))
+                INSERT INTO user_authors (user_id, author_name, story_count, total_score, topics)
+                VALUES (?, ?, 1, ?, ?)
+            ''', (user_id, author_name, max(topic_scores.values()), json.dumps(topic_scores)))
 
         conn.commit()
         conn.close()
@@ -347,11 +384,11 @@ class SQLiteStorage(StorageInterface):
         c = conn.cursor()
         
         c.execute('''
-            SELECT * FROM authors
-            WHERE story_count >= ?
+            SELECT * FROM user_authors
+            WHERE user_id = ? AND story_count >= ?
             ORDER BY story_count DESC, total_score DESC
             LIMIT 20
-        ''', (min_count,))
+        ''', (user_id, min_count))
         
         rows = c.fetchall()
         conn.close()

@@ -201,7 +201,7 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
     # Match topics using existing matcher
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Starting topic matching (embeddings)...", file=sys.stderr)
     matcher_start = time.time()
-    matcher = TopicMatcher(config_path="config.json")
+    matcher = TopicMatcher(config=config)
     matched_stories = matcher.match_stories(stories)
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Topic matching completed in {time.time() - matcher_start:.1f}s ({len(matched_stories)} matched)", file=sys.stderr)
 
@@ -212,15 +212,20 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Scoring all stories for weekend mode...", file=sys.stderr)
         all_scored_stories = matcher.score_all_stories(stories)
     
+    weekend_mode_active = wm_cfg.get("enabled") and _is_weekend()
+    stories_to_store = matched_stories
+    if weekend_mode_active and all_scored_stories is not None:
+        stories_to_store = [story for story, _ in all_scored_stories]
+
     # Process each story
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Storing {len(matched_stories)} stories in database...", file=sys.stderr)
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Storing {len(stories_to_store)} stories in database...", file=sys.stderr)
     db_start = time.time()
     item_ids = []
-    new_stories = []
+    new_story_urls = set()
     notable_authors = []
     continuing_threads = []
 
-    for story in matched_stories:
+    for story in stories_to_store:
         # Insert item — is_new=False means already delivered in a prior digest
         item_id, is_new = storage.insert_item(
             url=story['url'],
@@ -230,6 +235,7 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
             score=story['score'],
             fetched_at=story['fetched_at'],
             published_at=story.get('published_at', ''),
+            external_id=str(story['id']) if story.get('id') is not None else None,
         )
 
         # Store topic scores and author stats for all stories (tracking still applies)
@@ -243,6 +249,7 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
                 )
 
         storage.upsert_author(
+            user_id=user_id,
             author_name=story['by'],
             item_id=item_id,
             topic_scores=story['all_topic_scores']
@@ -251,10 +258,18 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
         # Only surface new stories in the digest
         if is_new:
             item_ids.append(item_id)
-            new_stories.append(story)
+            new_story_urls.add(story['url'])
 
-    matched_stories = new_stories
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Database storage completed in {time.time() - db_start:.1f}s ({len(matched_stories)} new)", file=sys.stderr)
+    if weekend_mode_active and all_scored_stories is not None:
+        all_scored_stories = [
+            (story, sim) for story, sim in all_scored_stories
+            if story['url'] in new_story_urls
+        ]
+        display_stories = [story for story, _ in all_scored_stories]
+    else:
+        display_stories = [story for story in matched_stories if story['url'] in new_story_urls]
+
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Database storage completed in {time.time() - db_start:.1f}s ({len(display_stories)} new)", file=sys.stderr)
     
     # Get notable authors
     authors_start = time.time()
@@ -264,7 +279,7 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
     )
     
     # Filter notable authors that appear in current batch
-    current_authors = {s['by'] for s in matched_stories}
+    current_authors = {s['by'] for s in display_stories}
     batch_notable = [a for a in notable_authors if a['author_name'] in current_authors]
 
     # Merge manually followed HN users (highlighted regardless of story count)
@@ -299,14 +314,14 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Digest recorded in {time.time() - digest_start:.1f}s", file=sys.stderr)
 
     # Fetch comment summaries and author karma for matched stories
-    if ENGAGEMENT_ENABLED and matched_stories:
+    if ENGAGEMENT_ENABLED and display_stories:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Fetching comment summaries and author karma...", file=sys.stderr)
         comments_start = time.time()
         try:
             db_config = config['storage']['sqlite']
             comment_detector = EngagementDetector(db_config['db_path'])
             karma_cache = {}
-            for story in matched_stories:
+            for story in display_stories:
                 story_id = story.get('id')
                 if story_id:
                     try:
@@ -324,7 +339,7 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
 
     # Detect engagement opportunities
     engagement_opportunities = []
-    if ENGAGEMENT_ENABLED and matched_stories:
+    if ENGAGEMENT_ENABLED and display_stories:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Detecting engagement opportunities...", file=sys.stderr)
         engagement_start = time.time()
         try:
@@ -346,7 +361,7 @@ def process_stories(stories: List[Dict], config: Dict) -> Dict:
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Total processing time: {time.time() - start_time:.1f}s", file=sys.stderr)
     
     return {
-        'stories': matched_stories,
+        'stories': display_stories,
         'notable_authors': batch_notable,
         'digest_id': digest_id,
         'item_ids': item_ids,
